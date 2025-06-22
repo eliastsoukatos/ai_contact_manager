@@ -11,45 +11,15 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QLabel,
     QApplication,
+    QHeaderView,
+    QStyle,
 )
-from PyQt5.QtGui import QStandardItem, QStandardItemModel
-from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, QPoint
 
 from db_manager import DBManager
 from config.settings import get_settings, save_settings
-
-
-class CheckableComboBox(QComboBox):
-    """Combo box allowing multiple selections via checkboxes."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setModel(QStandardItemModel(self))
-        self.view().pressed.connect(self._handle_pressed)
-        self.setEditable(True)
-        self.lineEdit().setReadOnly(True)
-        self.lineEdit().setPlaceholderText("Filter by tag...")
-
-    def _handle_pressed(self, index):
-        item = self.model().itemFromIndex(index)
-        if item.checkState() == Qt.Checked:
-            item.setCheckState(Qt.Unchecked)
-        else:
-            item.setCheckState(Qt.Checked)
-        self._update_text()
-        self.currentIndexChanged.emit(-1)
-
-    def checked_items(self):
-        return [
-            self.model().item(i).text()
-            for i in range(self.model().rowCount())
-            if self.model().item(i).checkState() == Qt.Checked
-        ]
-
-    def _update_text(self):
-        self.blockSignals(True)
-        self.lineEdit().setText(", ".join(self.checked_items()))
-        self.blockSignals(False)
+from ui.filter_popup import FilterPopup
 
 
 class ContactsTableWidget(QWidget):
@@ -89,17 +59,15 @@ class ContactsTableWidget(QWidget):
         self.filtered_contacts = []
         self.search_text = ""
         self.column_visibility = {h: True for h in self.HEADERS}
+        self.filters = {}
+        self.sort_column = None
+        self.sort_order = Qt.AscendingOrder
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-
-        # Tag filter dropdown is created here but not added to the internal
-        # layout so the main window can position it next to the search bar.
-        self.tag_filter = CheckableComboBox()
-        self.tag_filter.currentIndexChanged.connect(self._apply_filters)
 
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.HEADERS))
@@ -110,40 +78,29 @@ class ContactsTableWidget(QWidget):
         )
         self.table.itemChanged.connect(self._on_item_changed)
         self.table.cellDoubleClicked.connect(self._handle_cell_double_clicked)
+        self.table.setSortingEnabled(True)
+        header = self.table.horizontalHeader()
+        header.setSectionsClickable(True)
+        header.sectionClicked.connect(self._on_header_clicked)
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._show_filter_popup)
         layout.addWidget(self.table)
 
         self._apply_layout()
 
     def load_contacts(self):
         self.contacts = self.db.fetch_contacts()
-        self._refresh_tag_filter()
         self._apply_filters()
 
     def set_search_text(self, text: str):
         self.search_text = text
         self._apply_filters()
 
-    def _refresh_tag_filter(self):
-        tags = set()
-        for c in self.contacts:
-            if c.get("tags"):
-                tags.update(t.strip() for t in c["tags"].split(",") if t.strip())
-        model = self.tag_filter.model()
-        model.clear()
-        for tag in sorted(tags):
-            item = QStandardItem(tag)
-            item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            item.setData(Qt.Unchecked, Qt.CheckStateRole)
-            model.appendRow(item)
-        self.tag_filter._update_text()
 
     def _apply_filters(self):
         text = self.search_text.lower()
-        selected_tags = self.tag_filter.checked_items()
 
-        visible_fields = [
-            h for h in self.HEADERS if self.column_visibility.get(h, True)
-        ]
+        visible_fields = [h for h in self.HEADERS if self.column_visibility.get(h, True)]
 
         filtered = []
         for c in self.contacts:
@@ -151,15 +108,21 @@ class ContactsTableWidget(QWidget):
                 text in str(c.get(f, "")).lower() for f in visible_fields
             ):
                 continue
-            if selected_tags:
-                contact_tags = [
-                    t.strip()
-                    for t in (c.get("tags", "") or "").split(",")
-                    if t.strip()
-                ]
-                if not any(tag in contact_tags for tag in selected_tags):
-                    continue
-            filtered.append(c)
+
+            match = True
+            for field, values in self.filters.items():
+                val = str(c.get(field, ""))
+                if field == "tags":
+                    contact_tags = [t.strip() for t in val.split(",") if t.strip()]
+                    if not any(t in values for t in contact_tags):
+                        match = False
+                        break
+                else:
+                    if val not in values:
+                        match = False
+                        break
+            if match:
+                filtered.append(c)
 
         self._show_contacts(filtered)
 
@@ -245,6 +208,8 @@ class ContactsTableWidget(QWidget):
         self.table.blockSignals(False)
         if not getattr(self, "column_widths", {}):
             self.table.resizeColumnsToContents()
+        if self.sort_column is not None:
+            self.table.sortItems(self.sort_column, self.sort_order)
 
     def _on_item_changed(self, item):
         header = self.HEADERS[item.column()]
@@ -265,8 +230,6 @@ class ContactsTableWidget(QWidget):
             return
         self.db.update_contact(contact_id, {header: item.text()})
         self.contacts = self.db.fetch_contacts()
-        if header == "tags":
-            self._refresh_tag_filter()
         self._apply_filters()
         self._status_callback(f"{header.replace('_', ' ').title()} updated")
 
@@ -305,7 +268,6 @@ class ContactsTableWidget(QWidget):
                     contact.get("profile_id"), {"tags": ",".join(tags)}
                 )
         self.contacts = self.db.fetch_contacts()
-        self._refresh_tag_filter()
         self._apply_filters()
         self._status_callback("Tag added")
 
@@ -322,7 +284,6 @@ class ContactsTableWidget(QWidget):
                     contact.get("profile_id"), {"tags": ",".join(tags)}
                 )
         self.contacts = self.db.fetch_contacts()
-        self._refresh_tag_filter()
         self._apply_filters()
         self._status_callback("Tag removed")
 
@@ -364,6 +325,76 @@ class ContactsTableWidget(QWidget):
             self._status_callback("Column visibility updated")
             self.save_layout()
 
+    def _on_header_clicked(self, logical):
+        if self.sort_column == logical:
+            self.sort_order = (
+                Qt.DescendingOrder
+                if self.sort_order == Qt.AscendingOrder
+                else Qt.AscendingOrder
+            )
+        else:
+            self.sort_column = logical
+            self.sort_order = Qt.AscendingOrder
+        self._apply_filters()
+        self.save_layout()
+
+    def _show_filter_popup(self, pos):
+        header = self.table.horizontalHeader()
+        logical = header.logicalIndexAt(pos)
+        if logical < 0:
+            return
+        field = self.HEADERS[logical]
+        values = set()
+        for c in self.contacts:
+            val = c.get(field, "")
+            if field == "tags":
+                values.update(t.strip() for t in str(val).split(",") if t.strip())
+            else:
+                values.add(str(val))
+        popup = FilterPopup(values, self)
+        if field in self.filters:
+            popup.set_selected(self.filters[field])
+        popup.selection_changed.connect(
+            lambda f=field, p=popup: self._on_filter_changed(f, p)
+        )
+        popup.sort_requested.connect(
+            lambda order, col=logical: self._on_sort_requested(col, order, popup)
+        )
+        section_left = header.sectionViewportPosition(logical)
+        global_pos = header.mapToGlobal(QPoint(section_left, header.height()))
+        popup.move(global_pos)
+        popup.show()
+
+    def _on_filter_changed(self, field, popup):
+        selected = popup.selected_values()
+        all_vals = {str(v) for v in popup._all_values}
+        if selected == all_vals or not selected:
+            self.filters.pop(field, None)
+        else:
+            self.filters[field] = selected
+        self._update_header_icons()
+        self._apply_filters()
+        self.save_layout()
+
+    def _on_sort_requested(self, column, order, popup):
+        self.sort_column = column
+        self.sort_order = order
+        popup.hide()
+        self._apply_filters()
+        self.save_layout()
+
+    def _update_header_icons(self):
+        for idx, name in enumerate(self.HEADERS):
+            item = self.table.horizontalHeaderItem(idx)
+            if item is None:
+                continue
+            if name in self.filters:
+                item.setIcon(
+                    self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
+                )
+            else:
+                item.setIcon(QIcon())
+
     def _handle_cell_double_clicked(self, row, column):
         header_view = self.table.horizontalHeader()
         logical = header_view.logicalIndex(column)
@@ -382,6 +413,15 @@ class ContactsTableWidget(QWidget):
         self.column_visibility.update(settings.get("visibility", {}))
         self.column_order = settings.get("order", self.HEADERS[:])
         self.column_widths = settings.get("widths", {})
+        self.filters = get_settings().get("table_filters", {})
+        sort = get_settings().get("table_sort", {})
+        column = sort.get("column")
+        if column in self.HEADERS:
+            self.sort_column = self.HEADERS.index(column)
+            self.sort_order = (
+                Qt.DescendingOrder if sort.get("order") == "desc" else Qt.AscendingOrder
+            )
+        self._update_header_icons()
 
     def _apply_layout(self):
         header = self.table.horizontalHeader()
@@ -393,6 +433,7 @@ class ContactsTableWidget(QWidget):
             self.table.setColumnHidden(idx, not self.column_visibility.get(name, True))
             if name in getattr(self, "column_widths", {}):
                 header.resizeSection(idx, self.column_widths[name])
+        self._update_header_icons()
 
     def save_layout(self):
         header = self.table.horizontalHeader()
@@ -408,6 +449,14 @@ class ContactsTableWidget(QWidget):
             "visibility": self.column_visibility,
             "widths": widths,
         }
+        settings["table_filters"] = self.filters
+        sort = {}
+        if self.sort_column is not None:
+            sort = {
+                "column": self.HEADERS[self.sort_column],
+                "order": "desc" if self.sort_order == Qt.DescendingOrder else "asc",
+            }
+        settings["table_sort"] = sort
         save_settings()
 
 
