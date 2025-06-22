@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
+    QComboBox,
 )
 from PyQt5.QtCore import Qt
 
@@ -45,16 +46,20 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.search_bar)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels(
             [
+                "mobile",
                 "first_name",
                 "last_name",
                 "email",
                 "company_name",
+                "website",
                 "job_title",
-                "state",
+                "personal_linkedin_url",
+                "contact_disposition",
                 "tags",
+                "state",
             ]
         )
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -83,19 +88,60 @@ class MainWindow(QMainWindow):
         self.table.setRowCount(len(contacts))
         for row, contact in enumerate(contacts):
             values = [
+                contact.get("mobile", ""),
                 contact.get("first_name", ""),
                 contact.get("last_name", ""),
                 contact.get("email", ""),
                 contact.get("company_name", ""),
+                contact.get("website", ""),
                 contact.get("job_title", ""),
-                contact.get("state", ""),
-                contact.get("tags", ""),
+                contact.get("personal_linkedin_url", ""),
             ]
             for col, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.table.setItem(row, col, item)
+
+            combo = QComboBox()
+            dispositions = [
+                "connected_positive",
+                "connected_meeting_booked",
+                "connected_neutral",
+                "connected_negative",
+                "wrong_number",
+                "not_in_service",
+                "number_validated",
+                "left_voicemail",
+                "no_answer",
+                "do_not_call",
+                "referred_to_another_contact",
+                "busy_call_back_later",
+                "unreachable",
+                "wrong_company",
+            ]
+            combo.addItems(dispositions)
+            combo.setCurrentText(contact.get("contact_disposition", ""))
+            combo.currentTextChanged.connect(
+                lambda value, cid=contact.get("profile_id"): self._on_disposition_changed(cid, value)
+            )
+            self.table.setCellWidget(row, 8, combo)
+
+            tags_item = QTableWidgetItem(str(contact.get("tags", "")))
+            tags_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.table.setItem(row, 9, tags_item)
+
+            state_item = QTableWidgetItem(str(contact.get("state", "")))
+            state_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.table.setItem(row, 10, state_item)
         self.table.resizeColumnsToContents()
+
+    def _on_disposition_changed(self, contact_id, disposition):
+        """Update disposition in the database and refresh the table."""
+        if not contact_id:
+            return
+        self.db.update_contact(contact_id, {"contact_disposition": disposition})
+        self.contacts = self.db.fetch_contacts()
+        self._filter_contacts(self.search_bar.text())
 
     def _import_csv(self):
         """Prompt the user for a CSV file and import its contents."""
