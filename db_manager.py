@@ -25,7 +25,7 @@ class DBManager:
         conn = self.connect()
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS contacts (
-            profile_id TEXT,
+            profile_id TEXT PRIMARY KEY,
             first_name TEXT,
             last_name TEXT,
             sid TEXT,
@@ -151,7 +151,7 @@ class DBManager:
 
         placeholders = ", ".join(["?" for _ in columns])
         cols_joined = ", ".join([f'"{c}"' for c in columns])
-        sql = f"INSERT INTO contacts ({cols_joined}) VALUES ({placeholders})"
+        sql = f"INSERT OR IGNORE INTO contacts ({cols_joined}) VALUES ({placeholders})"
         conn.execute(sql, values)
         conn.commit()
 

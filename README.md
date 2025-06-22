@@ -3,7 +3,8 @@
 A small demo application for importing Cognism CSV files into a SQLite database and displaying them with a PyQt5 GUI. The project provides:
 
 * **csv_importer.py** – parses a CSV file and stores the contents in the database.
-* **db_manager.py** – manages the SQLite connection and schema.
+* **db_manager.py** – manages the SQLite connection and schema. Contacts are
+  stored with a unique `profile_id` so duplicate rows are ignored on import.
 * **ui/contacts_table.py** – contains the contact table widget with inline editing, batch actions and Excel-style column filtering.
 * **ui/settings_panel.py** – user interface for editing API keys, prompt templates and time zone options.
 * **config/settings.py** – loads and saves persistent configuration in the user's home directory.
