@@ -25,7 +25,41 @@ def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = Tr
     if not template:
         raise RuntimeError(f"Prompt template '{prompt_name}' not configured")
     variables = variables or {}
+
+    # Format the user's template with the given variables
     prompt = template.format(**variables)
+
+    # Build contextual lines with available variables
+    context_lines = []
+    key_map = {
+        "company_name": "Company Name",
+        "headcount": "Headcount",
+        "company_description": "Company Description",
+        "first_name": "First Name",
+        "last_name": "Last Name",
+        "job_title": "Job Title",
+    }
+    for key, label in key_map.items():
+        value = variables.get(key)
+        if value:
+            context_lines.append(f"{label}: {value}")
+
+    for key, value in variables.items():
+        if key not in key_map and value not in (None, ""):
+            pretty = key.replace("_", " ").title()
+            context_lines.append(f"{pretty}: {value}")
+
+    if context_lines:
+        prompt = f"{prompt}\n\n" + "\n".join(context_lines)
+
+    if prompt_name in {"target_company_validation", "icp_validation"}:
+        prompt += '\n\nAnswer ONLY "Yes" or "No". Do not add anything else.'
+    else:
+        prompt += (
+            "\n\nAnswer ONLY with the specific information requested, without any "
+            "explanation or extra formatting."
+        )
+
     client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=model,

@@ -63,6 +63,7 @@ def enrich_database(
                 {
                     "company_name": first.get("company_name", ""),
                     "company_description": first.get("company_description", ""),
+                    "headcount": first.get("headcount", ""),
                     "website": first.get("website", ""),
                 },
             )
