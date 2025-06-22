@@ -103,3 +103,30 @@ class DBManager:
         """
         conn.execute(create_table_sql)
         conn.commit()
+
+        # Ensure additional custom columns exist
+        additional_columns = {
+            "target_company": "TEXT",
+            "contact_icp_status": "TEXT",
+            "time_zone_utc": "TEXT",
+            "morning_call_time": "TEXT",
+            "afternoon_call_time": "TEXT",
+            "state": "TEXT",
+            "contact_disposition": "TEXT",
+            "clients_of_contact": "TEXT",
+            "area_of_business": "TEXT",
+            "most_relevant_summit": "TEXT",
+            "client_icp": "TEXT",
+            "tags": "TEXT",
+            "added_timestamp": "TEXT",
+        }
+
+        existing_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(contacts)")
+        }
+        for column, col_type in additional_columns.items():
+            if column not in existing_columns:
+                conn.execute(
+                    f"ALTER TABLE contacts ADD COLUMN {column} {col_type}"
+                )
+        conn.commit()
