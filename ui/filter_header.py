@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QHeaderView, QToolButton
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QRect
 
 
 class FilterHeader(QHeaderView):
@@ -19,6 +19,21 @@ class FilterHeader(QHeaderView):
         self._button.clicked.connect(self._button_clicked)
         self.sectionResized.connect(lambda *_: self._update_button())
         self.sectionMoved.connect(lambda *_: self._update_button())
+
+    def _section_rect(self, index):
+        """Return QRect covering the header section."""
+        if index < 0:
+            return QRect()
+        x = self.sectionViewportPosition(index)
+        w = self.sectionSize(index)
+        return QRect(x, 0, w, self.height())
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        index = self.logicalIndexAt(event.pos())
+        if index != self._hover_section:
+            self._hover_section = index
+            self._update_button()
 
     def _button_clicked(self):
         if self._hover_section is not None:
@@ -43,7 +58,7 @@ class FilterHeader(QHeaderView):
         if section is None:
             self._button.hide()
             return
-        rect = self.sectionRect(section)
+        rect = self._section_rect(section)
         x = rect.right() - self._button.width() - 2
         y = rect.center().y() - self._button.height() // 2
         self._button.move(x, y)
