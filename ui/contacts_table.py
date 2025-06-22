@@ -11,15 +11,21 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QLabel,
     QApplication,
+    QFileDialog,
+    QMessageBox,
 )
 from PyQt5.QtGui import QBrush
 from PyQt5.QtCore import Qt, QPoint
+
+import os
 
 from db_manager import DBManager
 from config.settings import get_settings, save_settings
 from ui.filter_popup import FilterPopup
 from ui.filter_header import FilterHeader
 from ui.tag_tools import TagSelectionDialog, ModeIndicator, TagsCellWidget
+from ui.export_dialog import ExportOptionsDialog
+from exporter import export_contacts
 from utils import (
     disposition_to_status,
     disposition_to_color,
@@ -554,6 +560,35 @@ class ContactsTableWidget(QWidget):
             }
         settings["table_sort"] = sort
         save_settings()
+
+    def export_view(self):
+        """Export the currently visible contacts to CSV."""
+        dialog = ExportOptionsDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        folder, base, split_by_tz, groups = dialog.options()
+        if not folder or not base:
+            QMessageBox.warning(self, "Export", "Folder and base file names are required")
+            return
+        target_dir = QFileDialog.getExistingDirectory(self, "Select Export Directory")
+        if not target_dir:
+            return
+        export_path = os.path.join(target_dir, folder)
+        headers = [h for h in self.HEADERS if self.column_visibility.get(h, True)]
+        files, folders = export_contacts(
+            self.filtered_contacts,
+            headers,
+            export_path,
+            base,
+            groups,
+            split_by_tz,
+        )
+        QMessageBox.information(
+            self,
+            "Export Complete",
+            f"Created {files} file(s) in {folders} folder(s) at {export_path}",
+        )
+        self._status_callback("Export completed")
 
 
 
