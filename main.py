@@ -43,7 +43,6 @@ class MainWindow(QMainWindow):
         search_row.addWidget(self.search_bar, 1)
 
         self.table_widget = ContactsTableWidget(self.db, self.show_status_message)
-        search_row.addWidget(self.table_widget.tag_filter)
         main_layout.addLayout(search_row)
 
         # Horizontal toolbar with compact actions
