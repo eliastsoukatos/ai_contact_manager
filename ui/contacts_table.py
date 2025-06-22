@@ -64,6 +64,7 @@ class ContactsTableWidget(QWidget):
         self.sort_order = Qt.AscendingOrder
         self.quick_mode = None
         self.quick_tag = ""
+        self.session_tags = set()
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
@@ -265,7 +266,7 @@ class ContactsTableWidget(QWidget):
         self._status_callback("Status updated")
 
     def _get_all_tags(self):
-        tags = set()
+        tags = set(self.session_tags)
         for c in self.contacts:
             tags.update(t.strip() for t in str(c.get("tags", "")).split(",") if t.strip())
         return sorted(tags)
@@ -277,6 +278,7 @@ class ContactsTableWidget(QWidget):
         tag = dialog.selected_tag()
         if not tag:
             return
+        self.session_tags.add(tag)
         for contact in self.filtered_contacts:
             self.db.add_tag(contact.get("profile_id"), tag)
         self.contacts = self.db.fetch_contacts()
@@ -297,12 +299,13 @@ class ContactsTableWidget(QWidget):
         self._status_callback("Tag removed")
 
     def start_quick_tag_mode(self):
-        dialog = TagSelectionDialog(self._get_all_tags(), title="Select Tag", allow_new=False, parent=self)
+        dialog = TagSelectionDialog(self._get_all_tags(), title="Select Tag", allow_new=True, parent=self)
         if dialog.exec() != QDialog.Accepted:
             return
         tag = dialog.selected_tag()
         if not tag:
             return
+        self.session_tags.add(tag)
         self.quick_mode = "add"
         self.quick_tag = tag
         self.mode_indicator.label.setText(f"Quick Tag mode: {tag}")
