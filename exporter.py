@@ -1,5 +1,4 @@
 import os
-import csv
 import re
 from typing import List, Tuple, Dict, Optional
 
@@ -21,6 +20,17 @@ def _chunk_list(items: List[dict], groups: int) -> List[List[dict]]:
         chunks.append(items[start:end])
         start = end
     return chunks
+
+
+def _format_csv_value(value: str) -> str:
+    """Return a CSV-safe version of *value* with quoting when needed."""
+    if value is None:
+        value = ""
+    text = str(value)
+    if any(ch in text for ch in ["\n", "\r", "\t", ",", '"']):
+        text = text.replace('"', '""')
+        return f'"{text}"'
+    return text
 
 
 def export_contacts(
@@ -86,12 +96,11 @@ def export_contacts(
             filename = "_".join(parts) + ".csv"
             path = os.path.join(export_dir, filename)
             with open(path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(header_row)
+                f.write(",".join(_format_csv_value(h) for h in header_row) + "\r\n")
                 for contact in chunk:
                     row = [contact.get("mobile", "")]
                     row += [contact.get(h, "") for h in headers if h != "mobile"]
-                    writer.writerow(row)
+                    f.write(",".join(_format_csv_value(v) for v in row) + "\r\n")
             file_count += 1
 
     return file_count
