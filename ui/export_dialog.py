@@ -5,23 +5,34 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QSpinBox,
     QCheckBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QStackedLayout,
 )
-from typing import Tuple
+from typing import List, Tuple
 
 
 class ExportOptionsDialog(QDialog):
     """Dialog to configure export options."""
 
-    def __init__(self, parent=None):
+    def __init__(self, headers: List[str], selected: List[str], parent=None):
         super().__init__(parent)
         self.setWindowTitle("Export View")
-        form = QFormLayout(self)
+        self._headers = headers
+        self._selected = set(selected)
+
+        self._stack = QStackedLayout(self)
+        self._build_main_page()
+        self._build_fields_page()
+        self._stack.setCurrentIndex(0)
+
+    def _build_main_page(self):
+        page = QWidget()
+        form = QFormLayout(page)
 
         self.folder_edit = QLineEdit()
         form.addRow("Folder Name", self.folder_edit)
-
-        self.base_edit = QLineEdit()
-        form.addRow("Base File Name", self.base_edit)
 
         self.tz_split = QCheckBox("Split by time zone")
         form.addRow(self.tz_split)
@@ -31,15 +42,43 @@ class ExportOptionsDialog(QDialog):
         self.group_spin.setValue(1)
         form.addRow("Number of groups", self.group_spin)
 
+        field_btn = QPushButton("Select Fields")
+        field_btn.clicked.connect(lambda: self._stack.setCurrentIndex(1))
+        form.addRow(field_btn)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addWidget(buttons)
 
-    def options(self) -> Tuple[str, str, bool, int]:
+        self._stack.addWidget(page)
+
+    def _build_fields_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        self.field_checks = {}
+        for header in self._headers:
+            cb = QCheckBox(header)
+            if header == "mobile":
+                cb.setChecked(True)
+                cb.setEnabled(False)
+            else:
+                cb.setChecked(header in self._selected)
+            layout.addWidget(cb)
+            self.field_checks[header] = cb
+
+        back_btn = QPushButton("Back")
+        back_btn.clicked.connect(lambda: self._stack.setCurrentIndex(0))
+        layout.addWidget(back_btn)
+        self._stack.addWidget(page)
+
+    def options(self) -> Tuple[str, bool, int, List[str]]:
+        fields = [
+            h for h, cb in self.field_checks.items() if cb.isChecked()
+        ]
         return (
             self.folder_edit.text().strip(),
-            self.base_edit.text().strip(),
             self.tz_split.isChecked(),
             self.group_spin.value(),
+            fields,
         )
