@@ -20,7 +20,7 @@ from PyQt5.QtCore import Qt, QPoint
 import os
 
 from db_manager import DBManager
-from config.settings import get_settings, save_settings
+from config.settings import get_settings, save_settings, update_setting
 from ui.filter_popup import FilterPopup
 from ui.filter_header import FilterHeader
 from ui.tag_tools import TagSelectionDialog, ModeIndicator, TagsCellWidget
@@ -563,30 +563,32 @@ class ContactsTableWidget(QWidget):
 
     def export_view(self):
         """Export the currently visible contacts to CSV."""
-        dialog = ExportOptionsDialog(self)
+        settings = get_settings()
+        selected = settings.get("export_fields", self.HEADERS)
+        dialog = ExportOptionsDialog(self.HEADERS, selected, self)
         if dialog.exec() != QDialog.Accepted:
             return
-        folder, base, split_by_tz, groups = dialog.options()
-        if not folder or not base:
-            QMessageBox.warning(self, "Export", "Folder and base file names are required")
+        folder, split_by_tz, groups, fields = dialog.options()
+        if not folder:
+            QMessageBox.warning(self, "Export", "Folder name is required")
             return
+        update_setting("export_fields", fields)
         target_dir = QFileDialog.getExistingDirectory(self, "Select Export Directory")
         if not target_dir:
             return
         export_path = os.path.join(target_dir, folder)
-        headers = [h for h in self.HEADERS if self.column_visibility.get(h, True)]
-        files, folders = export_contacts(
+        headers = [h for h in fields if self.column_visibility.get(h, True)]
+        files = export_contacts(
             self.filtered_contacts,
             headers,
             export_path,
-            base,
             groups,
             split_by_tz,
         )
         QMessageBox.information(
             self,
             "Export Complete",
-            f"Created {files} file(s) in {folders} folder(s) at {export_path}",
+            f"Created {files} file(s) in {export_path}",
         )
         self._status_callback("Export completed")
 

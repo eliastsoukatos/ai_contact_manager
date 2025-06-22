@@ -27,6 +27,7 @@ DEFAULT_SETTINGS = {
         "visibility": {},
         "widths": {},
     },
+    "export_fields": [],
 }
 
 _settings = None
