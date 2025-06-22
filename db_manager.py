@@ -137,11 +137,16 @@ class DBManager:
         self.create_contacts_table()
         conn = self.connect()
 
-        columns = []
-        values = []
-        for key, value in data.items():
-            columns.append(key)
-            values.append(value)
+        # Apply defaults and derive status from disposition
+        from utils import disposition_to_status
+
+        data = dict(data)
+        disposition = data.get("contact_disposition") or "not_defined"
+        data["contact_disposition"] = disposition
+        data.setdefault("status", disposition_to_status(disposition))
+
+        columns = list(data.keys())
+        values = list(data.values())
 
         placeholders = ", ".join(["?" for _ in columns])
         cols_joined = ", ".join([f'"{c}"' for c in columns])

@@ -62,6 +62,11 @@ class ContactsTableWidget(QWidget):
         "email",
         "company_name",
         "website",
+        "country",
+        "state",
+        "city",
+        "morning_call_time",
+        "afternoon_call_time",
         "target_company",
         "contact_icp_status",
         "clients_of_contact",
@@ -73,7 +78,6 @@ class ContactsTableWidget(QWidget):
         "personal_linkedin_url",
         "contact_disposition",
         "tags",
-        "state",
         "status",
     ]
 
@@ -168,6 +172,7 @@ class ContactsTableWidget(QWidget):
                 if header == "contact_disposition":
                     combo = QComboBox()
                     dispositions = [
+                        "not_defined",
                         "connected_positive",
                         "connected_meeting_booked",
                         "connected_neutral",
@@ -204,14 +209,10 @@ class ContactsTableWidget(QWidget):
                         lambda value, cid=contact.get("profile_id"): self._on_status_changed(cid, value)
                     )
                     self.table.setCellWidget(row, col, combo)
-                elif header in ["email", "personal_linkedin_url"]:
+                elif header in ["website", "personal_linkedin_url"]:
                     value = str(contact.get(header, ""))
                     if value:
-                        if header == "email":
-                            href = f"mailto:{value}"
-                        else:
-                            href = value
-                        label = QLabel(f"<a href='{href}'>{value}</a>")
+                        label = QLabel(f"<a href='{value}'>{value}</a>")
                         label.setOpenExternalLinks(True)
                         label.setProperty("raw", value)
                         label.linkActivated.connect(
@@ -272,7 +273,13 @@ class ContactsTableWidget(QWidget):
     def _on_disposition_changed(self, contact_id, disposition):
         if not contact_id:
             return
-        self.db.update_contact(contact_id, {"contact_disposition": disposition})
+        from utils import disposition_to_status
+
+        status = disposition_to_status(disposition)
+        self.db.update_contact(
+            contact_id,
+            {"contact_disposition": disposition, "status": status},
+        )
         self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Disposition updated")
