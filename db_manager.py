@@ -143,7 +143,7 @@ class DBManager:
             values.append(value)
 
         placeholders = ", ".join(["?" for _ in columns])
-        cols_joined = ", ".join(columns)
+        cols_joined = ", ".join([f'"{c}"' for c in columns])
         sql = f"INSERT INTO contacts ({cols_joined}) VALUES ({placeholders})"
         conn.execute(sql, values)
         conn.commit()
@@ -163,7 +163,7 @@ class DBManager:
         for column, value in data.items():
             if column not in valid_columns:
                 raise ValueError(f"Invalid column name: {column}")
-            updates.append(f"{column} = ?")
+            updates.append(f'"{column}" = ?')
             params.append(value)
         if not updates:
             return
@@ -209,7 +209,7 @@ class DBManager:
             for column, value in filters.items():
                 if column not in valid_columns:
                     raise ValueError(f"Invalid column name: {column}")
-                clauses.append(f"{column} = ?")
+                clauses.append(f'"{column}" = ?')
                 params.append(value)
             if clauses:
                 sql += " WHERE " + " AND ".join(clauses)
