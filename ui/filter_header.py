@@ -50,10 +50,17 @@ class FilterHeader(QHeaderView):
         if section is None:
             self._button.hide()
             return
-        rect = self.sectionRect(section)
-        x = rect.right() - self._button.width() - 2
-        y = rect.center().y() - self._button.height() // 2
-        self._button.move(x, y)
+        # QHeaderView in some PyQt5 versions does not expose ``sectionRect``.
+        # Calculate the rectangle of the section manually using its viewport
+        # position and size so the filter button can be placed correctly.
+        x = (
+            self.sectionViewportPosition(section)
+            + self.sectionSize(section)
+            - self._button.width()
+            - 2
+        )
+        y = (self.height() - self._button.height()) // 2
+        self._button.move(int(x), int(y))
         self._button.show()
 
     def set_active_section(self, index):
