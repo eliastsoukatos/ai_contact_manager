@@ -37,7 +37,6 @@ class MainWindow(QMainWindow):
         self.table_widget = ContactsTableWidget(self.db, self.show_status_message)
 
         central = QWidget()
-        central.setStyleSheet("background-color: #FFE5B4;")
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(4, 4, 4, 4)
