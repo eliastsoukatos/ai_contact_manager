@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime
 from db_manager import DBManager
 
 class CSVImporter:
@@ -32,4 +33,6 @@ class CSVImporter:
                 if not any(cell.strip() for cell in row):
                     continue
                 data = dict(zip(mapped_headers, row))
+                if not data.get("added_timestamp"):
+                    data["added_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.db_manager.insert_contact(data)
