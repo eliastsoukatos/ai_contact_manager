@@ -1,14 +1,10 @@
 # AI Contact Manager
 
-A small demo application for importing Cognism CSV files into a
-SQLite database and displaying them with a simple PyQt5 GUI.  The
-project provides:
+A small demo application for importing Cognism CSV files into a SQLite database and displaying them with a PyQt5 GUI. The project provides:
 
-* **csv_importer.py** – parses a CSV file and stores the contents in the
-  database.
+* **csv_importer.py** – parses a CSV file and stores the contents in the database.
 * **db_manager.py** – manages the SQLite connection and schema.
-* **main.py** – minimal PyQt5 window used as a placeholder for a future
-  interface.
+* **ui/contacts_table.py** – contains the contact table widget with inline editing and batch actions.
+* **main.py** – launches the application window and wires up the components.
 
-To import contacts you can create a `CSVImporter` instance pointing to
-your Cognism export and call `import_contacts()`.
+Import contacts by creating a `CSVImporter` instance pointing to your CSV file and calling `import_contacts()` or using the **Import CSV** button in the GUI.
