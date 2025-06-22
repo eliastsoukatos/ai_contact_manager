@@ -421,7 +421,8 @@ class ContactsTableWidget(QWidget):
             self.sort_order = (
                 Qt.DescendingOrder if sort.get("order") == "desc" else Qt.AscendingOrder
             )
-        self._update_header_icons()
+        if hasattr(self, "table"):
+            self._update_header_icons()
 
     def _apply_layout(self):
         header = self.table.horizontalHeader()
