@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QStyle,
 )
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QColor, QBrush
 from PyQt5.QtCore import Qt, QPoint
 
 from db_manager import DBManager
@@ -78,12 +78,12 @@ class ContactsTableWidget(QWidget):
         )
         self.table.itemChanged.connect(self._on_item_changed)
         self.table.cellDoubleClicked.connect(self._handle_cell_double_clicked)
-        self.table.setSortingEnabled(True)
+        self.table.setSortingEnabled(False)
         header = self.table.horizontalHeader()
         header.setSectionsClickable(True)
-        header.sectionClicked.connect(self._on_header_clicked)
+        header.sectionClicked.connect(self._open_filter_popup)
         header.setContextMenuPolicy(Qt.CustomContextMenu)
-        header.customContextMenuRequested.connect(self._show_filter_popup)
+        header.customContextMenuRequested.connect(self._show_filter_context)
         layout.addWidget(self.table)
 
         self._apply_layout()
@@ -325,22 +325,8 @@ class ContactsTableWidget(QWidget):
             self._status_callback("Column visibility updated")
             self.save_layout()
 
-    def _on_header_clicked(self, logical):
-        if self.sort_column == logical:
-            self.sort_order = (
-                Qt.DescendingOrder
-                if self.sort_order == Qt.AscendingOrder
-                else Qt.AscendingOrder
-            )
-        else:
-            self.sort_column = logical
-            self.sort_order = Qt.AscendingOrder
-        self._apply_filters()
-        self.save_layout()
-
-    def _show_filter_popup(self, pos):
+    def _open_filter_popup(self, logical):
         header = self.table.horizontalHeader()
-        logical = header.logicalIndexAt(pos)
         if logical < 0:
             return
         field = self.HEADERS[logical]
@@ -365,6 +351,11 @@ class ContactsTableWidget(QWidget):
         popup.move(global_pos)
         popup.show()
 
+    def _show_filter_context(self, pos):
+        header = self.table.horizontalHeader()
+        logical = header.logicalIndexAt(pos)
+        self._open_filter_popup(logical)
+
     def _on_filter_changed(self, field, popup):
         selected = popup.selected_values()
         all_vals = {str(v) for v in popup._all_values}
@@ -384,16 +375,18 @@ class ContactsTableWidget(QWidget):
         self.save_layout()
 
     def _update_header_icons(self):
+        normal_icon = self.style().standardIcon(QStyle.SP_ArrowDown)
+        active_icon = self.style().standardIcon(QStyle.SP_DialogApplyButton)
         for idx, name in enumerate(self.HEADERS):
             item = self.table.horizontalHeaderItem(idx)
             if item is None:
                 continue
             if name in self.filters:
-                item.setIcon(
-                    self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
-                )
+                item.setIcon(active_icon)
+                item.setBackground(self.palette().highlight())
             else:
-                item.setIcon(QIcon())
+                item.setIcon(normal_icon)
+                item.setBackground(QBrush())
 
     def _handle_cell_double_clicked(self, row, column):
         header_view = self.table.horizontalHeader()
