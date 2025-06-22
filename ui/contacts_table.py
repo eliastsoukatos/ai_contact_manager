@@ -11,15 +11,14 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QLabel,
     QApplication,
-    QHeaderView,
-    QStyle,
 )
-from PyQt5.QtGui import QIcon, QColor, QBrush
+from PyQt5.QtGui import QBrush
 from PyQt5.QtCore import Qt, QPoint
 
 from db_manager import DBManager
 from config.settings import get_settings, save_settings
 from ui.filter_popup import FilterPopup
+from ui.filter_header import FilterHeader
 
 
 class ContactsTableWidget(QWidget):
@@ -72,18 +71,20 @@ class ContactsTableWidget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
-        self.table.horizontalHeader().setSectionsMovable(True)
+        header = FilterHeader()
+        self.table.setHorizontalHeader(header)
+        header.setSectionsMovable(True)
         self.table.setEditTriggers(
             QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed
         )
         self.table.itemChanged.connect(self._on_item_changed)
         self.table.cellDoubleClicked.connect(self._handle_cell_double_clicked)
         self.table.setSortingEnabled(False)
-        header = self.table.horizontalHeader()
         header.setSectionsClickable(True)
-        header.sectionClicked.connect(self._open_filter_popup)
+        header.filter_requested.connect(self._open_filter_popup)
         header.setContextMenuPolicy(Qt.CustomContextMenu)
         header.customContextMenuRequested.connect(self._show_filter_context)
+        self._filter_header = header
         layout.addWidget(self.table)
 
         self._apply_layout()
@@ -349,6 +350,8 @@ class ContactsTableWidget(QWidget):
         section_left = header.sectionViewportPosition(logical)
         global_pos = header.mapToGlobal(QPoint(section_left, header.height()))
         popup.move(global_pos)
+        popup.closed.connect(lambda: self._filter_header.set_active_section(None))
+        self._filter_header.set_active_section(logical)
         popup.show()
 
     def _show_filter_context(self, pos):
@@ -363,7 +366,7 @@ class ContactsTableWidget(QWidget):
             self.filters.pop(field, None)
         else:
             self.filters[field] = selected
-        self._update_header_icons()
+        self._update_header_styles()
         self._apply_filters()
         self.save_layout()
 
@@ -374,19 +377,19 @@ class ContactsTableWidget(QWidget):
         self._apply_filters()
         self.save_layout()
 
-    def _update_header_icons(self):
-        normal_icon = self.style().standardIcon(QStyle.SP_ArrowDown)
-        active_icon = self.style().standardIcon(QStyle.SP_DialogApplyButton)
+    def _update_header_styles(self):
         for idx, name in enumerate(self.HEADERS):
             item = self.table.horizontalHeaderItem(idx)
             if item is None:
                 continue
+            font = item.font()
             if name in self.filters:
-                item.setIcon(active_icon)
                 item.setBackground(self.palette().highlight())
+                font.setBold(True)
             else:
-                item.setIcon(normal_icon)
                 item.setBackground(QBrush())
+                font.setBold(False)
+            item.setFont(font)
 
     def _handle_cell_double_clicked(self, row, column):
         header_view = self.table.horizontalHeader()
@@ -415,7 +418,7 @@ class ContactsTableWidget(QWidget):
                 Qt.DescendingOrder if sort.get("order") == "desc" else Qt.AscendingOrder
             )
         if hasattr(self, "table"):
-            self._update_header_icons()
+            self._update_header_styles()
 
     def _apply_layout(self):
         header = self.table.horizontalHeader()
@@ -427,7 +430,7 @@ class ContactsTableWidget(QWidget):
             self.table.setColumnHidden(idx, not self.column_visibility.get(name, True))
             if name in getattr(self, "column_widths", {}):
                 header.resizeSection(idx, self.column_widths[name])
-        self._update_header_icons()
+        self._update_header_styles()
 
     def save_layout(self):
         header = self.table.horizontalHeader()
