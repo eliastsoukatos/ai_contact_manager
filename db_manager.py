@@ -147,3 +147,42 @@ class DBManager:
         sql = f"INSERT INTO contacts ({cols_joined}) VALUES ({placeholders})"
         conn.execute(sql, values)
         conn.commit()
+
+    def fetch_contacts(self, filters=None):
+        """Fetch contacts from the database.
+
+        Parameters
+        ----------
+        filters : dict, optional
+            Mapping of column names to values to filter the results.
+
+        Returns
+        -------
+        list[dict]
+            List of contacts represented as dictionaries.
+        """
+        self.create_contacts_table()
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        sql = "SELECT * FROM contacts"
+        params = []
+
+        if filters:
+            # Validate filter columns against existing table columns
+            valid_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(contacts)")
+            }
+            clauses = []
+            for column, value in filters.items():
+                if column not in valid_columns:
+                    raise ValueError(f"Invalid column name: {column}")
+                clauses.append(f"{column} = ?")
+                params.append(value)
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        return [dict(zip(column_names, row)) for row in rows]
