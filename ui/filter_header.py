@@ -20,6 +20,13 @@ class FilterHeader(QHeaderView):
         self.sectionResized.connect(lambda *_: self._update_button())
         self.sectionMoved.connect(lambda *_: self._update_button())
 
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        index = self.logicalIndexAt(event.pos())
+        if index != self._hover_section:
+            self._hover_section = index
+            self._update_button()
+
     def _button_clicked(self):
         if self._hover_section is not None:
             self._active_section = self._hover_section
