@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
+    QStatusBar,
 )
 from PyQt5.QtCore import Qt, QSize
 
@@ -17,7 +18,6 @@ from db_manager import DBManager
 from csv_importer import CSVImporter
 from ui.contacts_table import ContactsTableWidget
 from ui.settings_panel import SettingsDialog
-from config.settings import get_settings
 
 
 class MainWindow(QMainWindow):
@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         self.search_bar.setPlaceholderText("Search contacts...")
         search_row.addWidget(self.search_bar, 1)
 
-        self.table_widget = ContactsTableWidget(self.db)
+        self.table_widget = ContactsTableWidget(self.db, self.show_status_message)
         search_row.addWidget(self.table_widget.tag_filter)
         main_layout.addLayout(search_row)
 
@@ -82,7 +82,14 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(self.table_widget)
 
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+
         self.search_bar.textChanged.connect(self.table_widget.set_search_text)
+
+    def show_status_message(self, text, timeout=3000):
+        if hasattr(self, "status_bar"):
+            self.status_bar.showMessage(text, timeout)
 
     def _open_settings(self):
         dialog = SettingsDialog(self)
@@ -99,6 +106,11 @@ class MainWindow(QMainWindow):
             return
         CSVImporter(file_path, self.db).import_contacts()
         self.table_widget.load_contacts()
+        self.show_status_message("Import completed")
+
+    def closeEvent(self, event):
+        self.table_widget.save_layout()
+        super().closeEvent(event)
 
 
 if __name__ == "__main__":
