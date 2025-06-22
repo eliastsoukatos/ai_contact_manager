@@ -5,6 +5,8 @@ A small demo application for importing Cognism CSV files into a SQLite database 
 * **csv_importer.py** – parses a CSV file and stores the contents in the database.
 * **db_manager.py** – manages the SQLite connection and schema.
 * **ui/contacts_table.py** – contains the contact table widget with inline editing and batch actions.
-* **main.py** – launches the application window and wires up the components.
+* **ui/settings_panel.py** – user interface for editing API keys, prompt templates and time zone options.
+* **config/settings.py** – loads and saves persistent configuration in the user's home directory.
+* **main.py** – launches the application window and wires up the components. The toolbar now includes a **Settings** button to open the configuration dialog.
 
 Import contacts by creating a `CSVImporter` instance pointing to your CSV file and calling `import_contacts()` or using the **Import CSV** button in the GUI.
