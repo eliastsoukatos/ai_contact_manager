@@ -1,8 +1,10 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication,
+    QFileDialog,
     QLineEdit,
     QMainWindow,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -11,6 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db_manager import DBManager
+from csv_importer import CSVImporter
 
 
 class MainWindow(QMainWindow):
@@ -31,6 +34,10 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+
+        self.import_button = QPushButton("Import CSV")
+        self.import_button.clicked.connect(self._import_csv)
+        layout.addWidget(self.import_button)
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search contacts...")
@@ -89,6 +96,20 @@ class MainWindow(QMainWindow):
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.table.setItem(row, col, item)
         self.table.resizeColumnsToContents()
+
+    def _import_csv(self):
+        """Prompt the user for a CSV file and import its contents."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select CSV file",
+            "",
+            "CSV files (*.csv);;All files (*)",
+        )
+        if not file_path:
+            return
+
+        CSVImporter(file_path, self.db).import_contacts()
+        self._load_contacts()
 
 
 if __name__ == "__main__":
