@@ -9,11 +9,14 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QLabel,
+    QApplication,
 )
 from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from PyQt5.QtCore import Qt
 
 from db_manager import DBManager
+from config.settings import get_settings, save_settings
 
 
 class CheckableComboBox(QComboBox):
@@ -67,13 +70,15 @@ class ContactsTableWidget(QWidget):
         "status",
     ]
 
-    def __init__(self, db: DBManager, parent=None):
+    def __init__(self, db: DBManager, status_callback=None, parent=None):
         super().__init__(parent)
         self.db = db
+        self._status_callback = status_callback or (lambda *args, **kwargs: None)
         self.contacts = []
         self.filtered_contacts = []
         self.search_text = ""
         self.column_visibility = {h: True for h in self.HEADERS}
+        self._load_layout()
         self._setup_ui()
         self.load_contacts()
 
@@ -88,11 +93,15 @@ class ContactsTableWidget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
+        self.table.horizontalHeader().setSectionsMovable(True)
         self.table.setEditTriggers(
             QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed
         )
         self.table.itemChanged.connect(self._on_item_changed)
+        self.table.cellDoubleClicked.connect(self._handle_cell_double_clicked)
         layout.addWidget(self.table)
+
+        self._apply_layout()
 
     def load_contacts(self):
         self.contacts = self.db.fetch_contacts()
@@ -121,11 +130,14 @@ class ContactsTableWidget(QWidget):
         text = self.search_text.lower()
         selected_tags = self.tag_filter.checked_items()
 
+        visible_fields = [
+            h for h in self.HEADERS if self.column_visibility.get(h, True)
+        ]
+
         filtered = []
         for c in self.contacts:
             if text and not any(
-                text in (c.get(f, "") or "").lower()
-                for f in ("first_name", "last_name", "email", "company_name")
+                text in str(c.get(f, "")).lower() for f in visible_fields
             ):
                 continue
             if selected_tags:
@@ -185,6 +197,22 @@ class ContactsTableWidget(QWidget):
                         lambda value, cid=contact.get("profile_id"): self._on_status_changed(cid, value)
                     )
                     self.table.setCellWidget(row, col, combo)
+                elif header in ["email", "personal_linkedin_url"]:
+                    value = str(contact.get(header, ""))
+                    if value:
+                        if header == "email":
+                            href = f"mailto:{value}"
+                        else:
+                            href = value
+                        label = QLabel(f"<a href='{href}'>{value}</a>")
+                        label.setOpenExternalLinks(True)
+                        label.setProperty("raw", value)
+                        label.linkActivated.connect(
+                            lambda _url, v=value: self._status_callback(f"Opened {v}")
+                        )
+                        self.table.setCellWidget(row, col, label)
+                    else:
+                        self.table.setItem(row, col, QTableWidgetItem(""))
                 else:
                     value = str(contact.get(header, ""))
                     item = QTableWidgetItem(value)
@@ -195,7 +223,8 @@ class ContactsTableWidget(QWidget):
         for idx, header in enumerate(self.HEADERS):
             self.table.setColumnHidden(idx, not self.column_visibility[header])
         self.table.blockSignals(False)
-        self.table.resizeColumnsToContents()
+        if not getattr(self, "column_widths", {}):
+            self.table.resizeColumnsToContents()
 
     def _on_item_changed(self, item):
         if self.HEADERS[item.column()] != "tags":
@@ -207,6 +236,7 @@ class ContactsTableWidget(QWidget):
         self.contacts = self.db.fetch_contacts()
         self._refresh_tag_filter()
         self._apply_filters()
+        self._status_callback("Tags updated")
 
     def _on_disposition_changed(self, contact_id, disposition):
         if not contact_id:
@@ -214,6 +244,7 @@ class ContactsTableWidget(QWidget):
         self.db.update_contact(contact_id, {"contact_disposition": disposition})
         self.contacts = self.db.fetch_contacts()
         self._apply_filters()
+        self._status_callback("Disposition updated")
 
     def _on_status_changed(self, contact_id, status):
         if not contact_id:
@@ -221,6 +252,7 @@ class ContactsTableWidget(QWidget):
         self.db.update_contact(contact_id, {"status": status})
         self.contacts = self.db.fetch_contacts()
         self._apply_filters()
+        self._status_callback("Status updated")
 
     def _batch_add_tag(self):
         tag, ok = QInputDialog.getText(self, "Add Tag", "Tag:")
@@ -237,6 +269,7 @@ class ContactsTableWidget(QWidget):
         self.contacts = self.db.fetch_contacts()
         self._refresh_tag_filter()
         self._apply_filters()
+        self._status_callback("Tag added")
 
     def _batch_remove_tag(self):
         tag, ok = QInputDialog.getText(self, "Remove Tag", "Tag to remove:")
@@ -253,6 +286,7 @@ class ContactsTableWidget(QWidget):
         self.contacts = self.db.fetch_contacts()
         self._refresh_tag_filter()
         self._apply_filters()
+        self._status_callback("Tag removed")
 
     def _batch_set_status(self):
         status, ok = QInputDialog.getItem(
@@ -268,6 +302,7 @@ class ContactsTableWidget(QWidget):
             self.db.update_contact(contact.get("profile_id"), {"status": status})
         self.contacts = self.db.fetch_contacts()
         self._apply_filters()
+        self._status_callback("Status updated for selection")
 
     def _customize_columns(self):
         dialog = QDialog(self)
@@ -288,6 +323,54 @@ class ContactsTableWidget(QWidget):
                 self.column_visibility[header] = cb.isChecked()
             for idx, header in enumerate(self.HEADERS):
                 self.table.setColumnHidden(idx, not self.column_visibility[header])
+            self._status_callback("Column visibility updated")
+            self.save_layout()
+
+    def _handle_cell_double_clicked(self, row, column):
+        header_view = self.table.horizontalHeader()
+        logical = header_view.logicalIndex(column)
+        widget = self.table.cellWidget(row, column)
+        if widget is not None and hasattr(widget, "property"):
+            value = widget.property("raw") or widget.text()
+        else:
+            item = self.table.item(row, column)
+            value = item.text() if item else ""
+        if value:
+            QApplication.clipboard().setText(value)
+            self._status_callback(f"Copied '{value}' to clipboard")
+
+    def _load_layout(self):
+        settings = get_settings().get("table_layout", {})
+        self.column_visibility.update(settings.get("visibility", {}))
+        self.column_order = settings.get("order", self.HEADERS[:])
+        self.column_widths = settings.get("widths", {})
+
+    def _apply_layout(self):
+        header = self.table.horizontalHeader()
+        if hasattr(self, "column_order") and set(self.column_order) == set(self.HEADERS):
+            for logical, name in enumerate(self.HEADERS):
+                target = self.column_order.index(name)
+                header.moveSection(header.visualIndex(logical), target)
+        for idx, name in enumerate(self.HEADERS):
+            self.table.setColumnHidden(idx, not self.column_visibility.get(name, True))
+            if name in getattr(self, "column_widths", {}):
+                header.resizeSection(idx, self.column_widths[name])
+
+    def save_layout(self):
+        header = self.table.horizontalHeader()
+        order = [
+            self.HEADERS[header.logicalIndex(i)] for i in range(header.count())
+        ]
+        widths = {
+            self.HEADERS[i]: header.sectionSize(i) for i in range(header.count())
+        }
+        settings = get_settings()
+        settings["table_layout"] = {
+            "order": order,
+            "visibility": self.column_visibility,
+            "widths": widths,
+        }
+        save_settings()
 
 
 

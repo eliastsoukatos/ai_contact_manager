@@ -23,6 +23,11 @@ DEFAULT_SETTINGS = {
         "morning_call": "09:00",
         "afternoon_call": "15:00",
     },
+    "table_layout": {
+        "order": [],
+        "visibility": {},
+        "widths": {},
+    },
 }
 
 _settings = None
