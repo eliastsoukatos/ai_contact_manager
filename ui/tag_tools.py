@@ -25,6 +25,7 @@ class TagSelectionDialog(QDialog):
         if allow_new:
             self.input = QLineEdit()
             self.input.setPlaceholderText("New tag...")
+            self.input.returnPressed.connect(self.accept)
             layout.addWidget(self.input)
         else:
             self.input = None
