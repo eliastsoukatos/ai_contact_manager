@@ -15,6 +15,7 @@ class FilterPopup(QWidget):
 
     selection_changed = pyqtSignal()
     sort_requested = pyqtSignal(Qt.SortOrder)
+    closed = pyqtSignal()
 
     def __init__(self, values, parent=None):
         super().__init__(parent, Qt.Popup)
@@ -87,6 +88,14 @@ class FilterPopup(QWidget):
         for i in range(self.list_widget.count()):
             self.list_widget.item(i).setCheckState(Qt.Unchecked)
         self.selection_changed.emit()
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)
+
+    def hideEvent(self, event):
+        self.closed.emit()
+        super().hideEvent(event)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
