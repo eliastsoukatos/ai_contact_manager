@@ -117,6 +117,7 @@ class DBManager:
             "area_of_business": "TEXT",
             "most_relevant_summit": "TEXT",
             "client_icp": "TEXT",
+            "company_alias": "TEXT",
             "tags": "TEXT",
             "added_timestamp": "TEXT",
             "status": "TEXT",

@@ -37,6 +37,7 @@ class ContactsTableWidget(QWidget):
         "last_name",
         "email",
         "company_name",
+        "company_alias",
         "website",
         "country",
         "state",
@@ -242,6 +243,7 @@ class ContactsTableWidget(QWidget):
                         "area_of_business",
                         "most_relevant_summit",
                         "client_icp",
+                        "company_alias",
                         "time_zone_utc",
                     ]:
                         flags |= Qt.ItemIsEditable
@@ -268,6 +270,7 @@ class ContactsTableWidget(QWidget):
             "area_of_business",
             "most_relevant_summit",
             "client_icp",
+            "company_alias",
             "time_zone_utc",
         }
         if header not in editable:
