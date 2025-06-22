@@ -20,6 +20,12 @@ from config.settings import get_settings, save_settings
 from ui.filter_popup import FilterPopup
 from ui.filter_header import FilterHeader
 from ui.tag_tools import TagSelectionDialog, ModeIndicator, TagsCellWidget
+from utils import (
+    disposition_to_status,
+    disposition_to_color,
+    status_to_color,
+    clean_phone_number,
+)
 
 
 class ContactsTableWidget(QWidget):
@@ -68,6 +74,22 @@ class ContactsTableWidget(QWidget):
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
+
+    def _set_disposition_style(self, combo: QComboBox, disposition: str):
+        """Apply background color to the disposition combo box."""
+        color = disposition_to_color(disposition)
+        if color:
+            combo.setStyleSheet(f"QComboBox{{background-color: {color};}}")
+        else:
+            combo.setStyleSheet("")
+
+    def _set_status_style(self, combo: QComboBox, status: str):
+        """Apply background color to the status combo box."""
+        color = status_to_color(status)
+        if color:
+            combo.setStyleSheet(f"QComboBox{{background-color: {color};}}")
+        else:
+            combo.setStyleSheet("")
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -162,9 +184,14 @@ class ContactsTableWidget(QWidget):
                         "wrong_company",
                     ]
                     combo.addItems(dispositions)
-                    combo.setCurrentText(contact.get("contact_disposition", ""))
+                    current_disp = contact.get("contact_disposition", "")
+                    combo.setCurrentText(current_disp)
+                    self._set_disposition_style(combo, current_disp)
                     combo.currentTextChanged.connect(
-                        lambda value, cid=contact.get("profile_id"): self._on_disposition_changed(cid, value)
+                        lambda value, cid=contact.get("profile_id"), c=combo: (
+                            self._on_disposition_changed(cid, value),
+                            self._set_disposition_style(c, value),
+                        )
                     )
                     self.table.setCellWidget(row, col, combo)
                 elif header == "tags":
@@ -177,9 +204,14 @@ class ContactsTableWidget(QWidget):
                 elif header == "status":
                     combo = QComboBox()
                     combo.addItems(["active", "inactive"])
-                    combo.setCurrentText(contact.get("status", ""))
+                    current_status = contact.get("status", "")
+                    combo.setCurrentText(current_status)
+                    self._set_status_style(combo, current_status)
                     combo.currentTextChanged.connect(
-                        lambda value, cid=contact.get("profile_id"): self._on_status_changed(cid, value)
+                        lambda value, cid=contact.get("profile_id"), c=combo: (
+                            self._on_status_changed(cid, value),
+                            self._set_status_style(c, value),
+                        )
                     )
                     self.table.setCellWidget(row, col, combo)
                 elif header in ["website", "personal_linkedin_url"]:
@@ -194,6 +226,11 @@ class ContactsTableWidget(QWidget):
                         self.table.setCellWidget(row, col, label)
                     else:
                         self.table.setItem(row, col, QTableWidgetItem(""))
+                elif header == "mobile":
+                    value = clean_phone_number(str(contact.get("mobile", "")))
+                    item = QTableWidgetItem(value)
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    self.table.setItem(row, col, item)
                 else:
                     value = str(contact.get(header, ""))
                     item = QTableWidgetItem(value)
@@ -246,8 +283,6 @@ class ContactsTableWidget(QWidget):
     def _on_disposition_changed(self, contact_id, disposition):
         if not contact_id:
             return
-        from utils import disposition_to_status
-
         status = disposition_to_status(disposition)
         self.db.update_contact(
             contact_id,
