@@ -11,8 +11,18 @@ class CSVImporter:
 
     @staticmethod
     def _map_header(header):
-        """Map a Cognism header to lower_snake_case."""
-        return header.strip().lower().replace(" ", "_").replace("/", "_")
+        """Map a Cognism header to lower_snake_case.
+
+        Hyphens and slashes are converted to underscores so the resulting
+        column names are valid in SQLite without additional quoting.
+        """
+        return (
+            header.strip()
+            .lower()
+            .replace(" ", "_")
+            .replace("/", "_")
+            .replace("-", "_")
+        )
 
     def import_contacts(self):
         """Read the CSV and insert rows into the contacts table."""
