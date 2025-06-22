@@ -62,6 +62,13 @@ class ContactsTableWidget(QWidget):
         "email",
         "company_name",
         "website",
+        "target_company",
+        "contact_icp_status",
+        "clients_of_contact",
+        "area_of_business",
+        "most_relevant_summit",
+        "client_icp",
+        "time_zone_utc",
         "job_title",
         "personal_linkedin_url",
         "contact_disposition",
@@ -216,7 +223,19 @@ class ContactsTableWidget(QWidget):
                 else:
                     value = str(contact.get(header, ""))
                     item = QTableWidgetItem(value)
-                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+                    if header in [
+                        "target_company",
+                        "contact_icp_status",
+                        "clients_of_contact",
+                        "area_of_business",
+                        "most_relevant_summit",
+                        "client_icp",
+                        "time_zone_utc",
+                    ]:
+                        flags |= Qt.ItemIsEditable
+                        item.setData(Qt.UserRole, contact.get("profile_id"))
+                    item.setFlags(flags)
                     self.table.setItem(row, col, item)
 
             self.table.setColumnHidden(col, not self.column_visibility[header])
@@ -227,16 +246,28 @@ class ContactsTableWidget(QWidget):
             self.table.resizeColumnsToContents()
 
     def _on_item_changed(self, item):
-        if self.HEADERS[item.column()] != "tags":
+        header = self.HEADERS[item.column()]
+        editable = {
+            "tags",
+            "target_company",
+            "contact_icp_status",
+            "clients_of_contact",
+            "area_of_business",
+            "most_relevant_summit",
+            "client_icp",
+            "time_zone_utc",
+        }
+        if header not in editable:
             return
         contact_id = item.data(Qt.UserRole)
         if not contact_id:
             return
-        self.db.update_contact(contact_id, {"tags": item.text()})
+        self.db.update_contact(contact_id, {header: item.text()})
         self.contacts = self.db.fetch_contacts()
-        self._refresh_tag_filter()
+        if header == "tags":
+            self._refresh_tag_filter()
         self._apply_filters()
-        self._status_callback("Tags updated")
+        self._status_callback(f"{header.replace('_', ' ').title()} updated")
 
     def _on_disposition_changed(self, contact_id, disposition):
         if not contact_id:
