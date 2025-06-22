@@ -38,3 +38,7 @@ Available models you can select are:
 - `o3-mini`
 
 Use only the base model name (e.g. `"gpt-4.1"`) without any date suffixes.
+
+The company alias field is always generated automatically during enrichment.
+The application uses a fixed prompt that cannot be customized to produce a
+short, conversational version of the company name when the alias field is empty.

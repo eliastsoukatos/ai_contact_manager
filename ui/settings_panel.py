@@ -71,7 +71,6 @@ class SettingsDialog(QDialog):
             ("area_of_business", "Area of Business"),
             ("most_relevant_summit", "Most Relevant Summit"),
             ("client_icp", "ICP of the Client"),
-            ("company_alias", "Company Alias"),
         ]
         for key, label in prompts:
             edit = QPlainTextEdit(psettings.get(key, ""))

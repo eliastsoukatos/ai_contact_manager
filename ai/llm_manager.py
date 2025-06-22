@@ -2,6 +2,18 @@ from openai import OpenAI
 from config.settings import get_settings
 
 
+COMPANY_ALIAS_PROMPT = (
+    "Here is the official company name:\n"
+    "{company_name}\n"
+    "Your task is to return ONLY the short, conversational, or common alias people use to refer to this company.\n"
+    "If the name is \u201cThe Walt Disney Company\u201d, return \u201cDisney\u201d.\n"
+    "If the name is \u201cA.A. Monkey LLC\u201d, return \u201cA.A. Monkey\u201d.\n"
+    "If the name is \u201cPinocho Company by T-Mobile\u201d, return \u201cPinocho\u201d.\n"
+    "If there is no obvious alias, just return the most natural main part of the name.\n"
+    "Output ONLY the alias, with no extra text, formatting, or explanation."
+)
+
+
 def _get_openai_config():
     settings = get_settings()
     return settings.get("openai_api_key"), settings.get("llm_model"), settings.get("prompts", {})
@@ -13,6 +25,8 @@ def is_configured() -> bool:
 
 
 def get_prompt(name: str) -> str:
+    if name == "company_alias":
+        return COMPANY_ALIAS_PROMPT
     _api, _model, prompts = _get_openai_config()
     return prompts.get(name, "")
 
@@ -21,9 +35,12 @@ def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = Tr
     api_key, model, prompts = _get_openai_config()
     if not api_key or not model:
         raise RuntimeError("OpenAI API key or model not configured")
-    template = prompts.get(prompt_name)
-    if not template:
-        raise RuntimeError(f"Prompt template '{prompt_name}' not configured")
+    if prompt_name == "company_alias":
+        template = COMPANY_ALIAS_PROMPT
+    else:
+        template = prompts.get(prompt_name)
+        if not template:
+            raise RuntimeError(f"Prompt template '{prompt_name}' not configured")
     variables = variables or {}
 
     # Format the user's template with the given variables
