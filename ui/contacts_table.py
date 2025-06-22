@@ -1,7 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QComboBox,
@@ -81,25 +80,10 @@ class ContactsTableWidget(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        self.add_tag_button = QPushButton("Add Tag to All Visible")
-        self.add_tag_button.clicked.connect(self._batch_add_tag)
-        layout.addWidget(self.add_tag_button)
-
-        self.remove_tag_button = QPushButton("Remove Tag from All Visible")
-        self.remove_tag_button.clicked.connect(self._batch_remove_tag)
-        layout.addWidget(self.remove_tag_button)
-
-        self.status_all_button = QPushButton("Set Status for All Visible")
-        self.status_all_button.clicked.connect(self._batch_set_status)
-        layout.addWidget(self.status_all_button)
-
-        self.column_settings_button = QPushButton("Customize Columns")
-        self.column_settings_button.clicked.connect(self._customize_columns)
-        layout.addWidget(self.column_settings_button)
-
+        # Tag filter dropdown is created here but not added to the internal
+        # layout so the main window can position it next to the search bar.
         self.tag_filter = CheckableComboBox()
         self.tag_filter.currentIndexChanged.connect(self._apply_filters)
-        layout.addWidget(self.tag_filter)
 
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.HEADERS))
