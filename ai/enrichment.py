@@ -54,20 +54,21 @@ def enrich_database(
         companies.setdefault(key, []).append(c)
 
     for key, clist in companies.items():
-        first = clist[0]
-        if first.get("target_company"):
+        missing = [c for c in clist if not c.get("target_company")]
+        if not missing:
             continue
+        sample = missing[0]
         try:
             result = run_prompt(
                 "target_company_validation",
                 {
-                    "company_name": first.get("company_name", ""),
-                    "company_description": first.get("company_description", ""),
-                    "headcount": first.get("headcount", ""),
-                    "website": first.get("website", ""),
+                    "company_name": sample.get("company_name", ""),
+                    "company_description": sample.get("company_description", ""),
+                    "headcount": sample.get("headcount", ""),
+                    "website": sample.get("website", ""),
                 },
             )
-            for c in clist:
+            for c in missing:
                 db.update_contact(c["profile_id"], {"target_company": result})
         except Exception as exc:  # noqa: BLE001
             status_callback(str(exc))
