@@ -33,6 +33,9 @@ class MainWindow(QMainWindow):
         self._setup_ui()
 
     def _setup_ui(self):
+        # Instantiate main table widget first so actions can reference it
+        self.table_widget = ContactsTableWidget(self.db, self.show_status_message)
+
         central = QWidget()
         central.setStyleSheet("background-color: #FFE5B4;")
         self.setCentralWidget(central)
@@ -137,8 +140,6 @@ class MainWindow(QMainWindow):
         self.search_bar.setPlaceholderText("Search contacts...")
         self.search_bar.setFixedHeight(24)
         header_row.addWidget(self.search_bar, 1)
-
-        self.table_widget = ContactsTableWidget(self.db, self.show_status_message)
         main_layout.addLayout(header_row)
 
         # Main table view
