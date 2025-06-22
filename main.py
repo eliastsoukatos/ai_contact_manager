@@ -16,6 +16,8 @@ from PyQt5.QtCore import Qt, QSize
 from db_manager import DBManager
 from csv_importer import CSVImporter
 from ui.contacts_table import ContactsTableWidget
+from ui.settings_panel import SettingsDialog
+from config.settings import get_settings
 
 
 class MainWindow(QMainWindow):
@@ -71,11 +73,20 @@ class MainWindow(QMainWindow):
         columns_action.triggered.connect(self.table_widget._customize_columns)
         toolbar.addAction(columns_action)
 
+        settings_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogDetailedView), "Settings", self)
+        settings_action.setToolTip("Application and AI settings")
+        settings_action.triggered.connect(self._open_settings)
+        toolbar.addAction(settings_action)
+
         main_layout.addWidget(toolbar)
 
         main_layout.addWidget(self.table_widget)
 
         self.search_bar.textChanged.connect(self.table_widget.set_search_text)
+
+    def _open_settings(self):
+        dialog = SettingsDialog(self)
+        dialog.exec()
 
     def _import_csv(self):
         file_path, _ = QFileDialog.getOpenFileName(
