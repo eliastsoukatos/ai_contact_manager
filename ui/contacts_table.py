@@ -19,7 +19,7 @@ from db_manager import DBManager
 from config.settings import get_settings, save_settings
 from ui.filter_popup import FilterPopup
 from ui.filter_header import FilterHeader
-from ui.tag_tools import TagSelectionDialog, ModeIndicator
+from ui.tag_tools import TagSelectionDialog, ModeIndicator, TagsCellWidget
 
 
 class ContactsTableWidget(QWidget):
@@ -167,12 +167,12 @@ class ContactsTableWidget(QWidget):
                     )
                     self.table.setCellWidget(row, col, combo)
                 elif header == "tags":
-                    tags_item = QTableWidgetItem(str(contact.get("tags", "")))
-                    tags_item.setFlags(
-                        Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
+                    tags = [t for t in str(contact.get("tags", "")).split(",") if t]
+                    widget = TagsCellWidget(
+                        contact.get("profile_id"), tags, row, self._on_tag_button_clicked
                     )
-                    tags_item.setData(Qt.UserRole, contact.get("profile_id"))
-                    self.table.setItem(row, col, tags_item)
+                    widget.setProperty("raw", contact.get("tags", ""))
+                    self.table.setCellWidget(row, col, widget)
                 elif header == "status":
                     combo = QComboBox()
                     combo.addItems(["active", "inactive"])
@@ -310,15 +310,9 @@ class ContactsTableWidget(QWidget):
         self._status_callback("Quick Tag mode active")
 
     def start_quick_remove_mode(self):
-        dialog = TagSelectionDialog(self._get_all_tags(), title="Select Tag to Remove", allow_new=False, parent=self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-        tag = dialog.selected_tag()
-        if not tag:
-            return
         self.quick_mode = "remove"
-        self.quick_tag = tag
-        self.mode_indicator.label.setText(f"Remove Tag mode: {tag}")
+        self.quick_tag = ""
+        self.mode_indicator.label.setText("Remove Tag mode")
         self.mode_indicator.show()
         self._status_callback("Remove Tag mode active")
 
@@ -447,17 +441,26 @@ class ContactsTableWidget(QWidget):
     def _on_cell_clicked(self, row, column):
         if self.quick_mode not in {"add", "remove"}:
             return
-        if self.HEADERS[column] != "tags":
-            return
-        contact = self.filtered_contacts[row]
         if self.quick_mode == "add":
+            if self.HEADERS[column] != "tags":
+                return
+            contact = self.filtered_contacts[row]
             self.db.add_tag(contact.get("profile_id"), self.quick_tag)
+            self.contacts = self.db.fetch_contacts()
+            scroll = self.table.verticalScrollBar().value()
+            self._apply_filters()
+            self.table.verticalScrollBar().setValue(scroll)
             self._status_callback("Tag added")
-        else:
-            self.db.remove_tag(contact.get("profile_id"), self.quick_tag)
-            self._status_callback("Tag removed")
+
+    def _on_tag_button_clicked(self, row, contact_id, tag):
+        if self.quick_mode != "remove":
+            return
+        scroll = self.table.verticalScrollBar().value()
+        self.db.remove_tag(contact_id, tag)
         self.contacts = self.db.fetch_contacts()
         self._apply_filters()
+        self.table.verticalScrollBar().setValue(scroll)
+        self._status_callback("Tag removed")
 
     def _load_layout(self):
         settings = get_settings().get("table_layout", {})

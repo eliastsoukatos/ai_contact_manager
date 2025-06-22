@@ -66,5 +66,28 @@ class ModeIndicator(QWidget):
         layout.addWidget(self.label)
         layout.addWidget(self.exit_btn)
         layout.addStretch(1)
+        self.setStyleSheet("background-color: #ffec8b;")
+
+
+class TagsCellWidget(QWidget):
+    """Widget displaying contact tags as individual buttons."""
+
+    def __init__(self, contact_id, tags, row, click_callback, parent=None):
+        super().__init__(parent)
+        self._contact_id = contact_id
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        for tag in tags:
+            btn = QPushButton(tag)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setStyleSheet(
+                "QPushButton {background-color: #e0e0e0; border: 1px solid #999; "
+                "border-radius: 3px; padding: 1px 3px;}"
+                "QPushButton:hover {background-color: #d0d0d0;}"
+            )
+            btn.clicked.connect(lambda _=None, r=row, cid=contact_id, t=tag: click_callback(r, cid, t))
+            layout.addWidget(btn)
+        layout.addStretch(1)
 
 
