@@ -130,3 +130,20 @@ class DBManager:
                     f"ALTER TABLE contacts ADD COLUMN {column} {col_type}"
                 )
         conn.commit()
+
+    def insert_contact(self, data):
+        """Insert a row of contact data into the database."""
+        self.create_contacts_table()
+        conn = self.connect()
+
+        columns = []
+        values = []
+        for key, value in data.items():
+            columns.append(key)
+            values.append(value)
+
+        placeholders = ", ".join(["?" for _ in columns])
+        cols_joined = ", ".join(columns)
+        sql = f"INSERT INTO contacts ({cols_joined}) VALUES ({placeholders})"
+        conn.execute(sql, values)
+        conn.commit()
