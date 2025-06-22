@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         import_action.triggered.connect(self._import_csv)
         toolbar.addAction(import_action)
 
-        add_tag_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Add Tag", self)
+        add_tag_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Add Tag to All", self)
         add_tag_action.setToolTip("Add tag to all visible contacts")
         add_tag_action.triggered.connect(self.table_widget._batch_add_tag)
         toolbar.addAction(add_tag_action)
@@ -63,6 +63,16 @@ class MainWindow(QMainWindow):
         remove_tag_action.setToolTip("Remove tag from all visible contacts")
         remove_tag_action.triggered.connect(self.table_widget._batch_remove_tag)
         toolbar.addAction(remove_tag_action)
+
+        quick_tag_action = QAction(self.style().standardIcon(QStyle.SP_DialogYesButton), "Quick Tag", self)
+        quick_tag_action.setToolTip("Tag contacts quickly")
+        quick_tag_action.triggered.connect(self.table_widget.start_quick_tag_mode)
+        toolbar.addAction(quick_tag_action)
+
+        quick_remove_action = QAction(self.style().standardIcon(QStyle.SP_DialogNoButton), "Remove Tag Mode", self)
+        quick_remove_action.setToolTip("Quickly remove tag from contacts")
+        quick_remove_action.triggered.connect(self.table_widget.start_quick_remove_mode)
+        toolbar.addAction(quick_remove_action)
 
         status_action = QAction(self.style().standardIcon(QStyle.SP_DialogApplyButton), "Set Status", self)
         status_action.setToolTip("Set status for all visible contacts")
