@@ -1,10 +1,28 @@
+import os
 import sqlite3
 
 class DBManager:
-    def __init__(self, db_path="contacts.db"):
-        self.conn = sqlite3.connect(db_path)
+    """Simple manager for SQLite database connections."""
+
+    def __init__(self, db_name="contacts.db"):
+        # Store absolute path to the database within the project directory
+        self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), db_name)
+        self.conn = None
+
+    def connect(self):
+        """Create a connection to the SQLite database if not already connected."""
+        if self.conn is None:
+            self.conn = sqlite3.connect(self.db_path)
+        return self.conn
+
+    def close(self):
+        """Close the database connection if it exists."""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
 
     def create_contacts_table(self):
+        conn = self.connect()
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS contacts (
             profile_id TEXT,
@@ -83,5 +101,5 @@ class DBManager:
             job_change_date TEXT
         );
         """
-        self.conn.execute(create_table_sql)
-        self.conn.commit()
+        conn.execute(create_table_sql)
+        conn.commit()
