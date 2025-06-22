@@ -148,7 +148,39 @@ class DBManager:
         conn.execute(sql, values)
         conn.commit()
 
-    def fetch_contacts(self, filters=None):
+    def update_contact(self, contact_id, data):
+        """Update an existing contact identified by profile_id."""
+        if not data:
+            return
+        self.create_contacts_table()
+        conn = self.connect()
+
+        valid_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(contacts)")
+        }
+        updates = []
+        params = []
+        for column, value in data.items():
+            if column not in valid_columns:
+                raise ValueError(f"Invalid column name: {column}")
+            updates.append(f"{column} = ?")
+            params.append(value)
+        if not updates:
+            return
+
+        params.append(contact_id)
+        sql = f"UPDATE contacts SET {', '.join(updates)} WHERE profile_id = ?"
+        conn.execute(sql, params)
+        conn.commit()
+
+    def delete_contact(self, contact_id):
+        """Delete a contact from the database by profile_id."""
+        self.create_contacts_table()
+        conn = self.connect()
+        conn.execute("DELETE FROM contacts WHERE profile_id = ?", (contact_id,))
+        conn.commit()
+
+    def fetch_contacts(self, filters=None, limit=None, offset=None):
         """Fetch contacts from the database.
 
         Parameters
@@ -181,6 +213,16 @@ class DBManager:
                 params.append(value)
             if clauses:
                 sql += " WHERE " + " AND ".join(clauses)
+
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+            if offset is not None:
+                sql += " OFFSET ?"
+                params.append(offset)
+        elif offset is not None:
+            sql += " LIMIT -1 OFFSET ?"
+            params.append(offset)
 
         cursor.execute(sql, params)
         rows = cursor.fetchall()
