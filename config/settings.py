@@ -1,4 +1,4 @@
-# Configuration management for AI Contact Manager
+# Configuration management for VibeList
 
 import json
 import os
