@@ -1,6 +1,9 @@
 from typing import Callable, Dict, List
+from datetime import datetime, timedelta
+
 from db_manager import DBManager
-from .llm_manager import run_prompt, is_configured
+from config.settings import get_settings
+from .llm_manager import run_prompt, is_configured, lookup_utc_offset
 
 
 AI_FIELDS = [
@@ -10,6 +13,27 @@ AI_FIELDS = [
     "client_icp",
     "time_zone_utc",
 ]
+
+
+def _shift_time(time_str: str, hours: int) -> str:
+    dt = datetime.strptime(time_str, "%H:%M")
+    dt += timedelta(hours=hours)
+    return dt.strftime("%H:%M")
+
+
+def _calculate_call_times(offset: str) -> tuple[str, str]:
+    tz = get_settings().get("timezone", {})
+    user_offset = int(tz.get("utc_offset", 0))
+    morning = tz.get("morning_call", "09:00")
+    afternoon = tz.get("afternoon_call", "15:00")
+
+    try:
+        contact_offset = int(str(offset))
+    except (TypeError, ValueError):
+        return "NA", "NA"
+
+    diff = contact_offset - user_offset
+    return _shift_time(morning, diff), _shift_time(afternoon, diff)
 
 
 def estimate_steps(db: DBManager) -> int:
@@ -103,9 +127,30 @@ def enrich_database(
                         progress_callback(step, total)
                 if not c.get("time_zone_utc"):
                     try:
-                        result = run_prompt("time_zone_lookup", c)
-                        db.update_contact(c["profile_id"], {"time_zone_utc": result})
+                        result = lookup_utc_offset(
+                            c.get("country", ""),
+                            c.get("state", ""),
+                            c.get("city", ""),
+                        )
+                        morning, afternoon = _calculate_call_times(result)
+                        db.update_contact(
+                            c["profile_id"],
+                            {
+                                "time_zone_utc": result,
+                                "morning_call_time": morning,
+                                "afternoon_call_time": afternoon,
+                            },
+                        )
                     except Exception as exc:  # noqa: BLE001
                         status_callback(str(exc))
                     step += 1
                     progress_callback(step, total)
+                elif not c.get("morning_call_time") or not c.get("afternoon_call_time"):
+                    morning, afternoon = _calculate_call_times(c.get("time_zone_utc"))
+                    db.update_contact(
+                        c["profile_id"],
+                        {
+                            "morning_call_time": morning,
+                            "afternoon_call_time": afternoon,
+                        },
+                    )

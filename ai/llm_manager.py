@@ -67,3 +67,24 @@ def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = Tr
     )
     text = response.choices[0].message.content
     return text.strip() if clean else text
+
+
+def lookup_utc_offset(country: str, state: str, city: str) -> str:
+    """Return UTC offset for the given location using a dedicated prompt."""
+    api_key, model, _ = _get_openai_config()
+    if not api_key or not model:
+        raise RuntimeError("OpenAI API key or model not configured")
+
+    prompt = (
+        "Given the following information, provide ONLY the UTC offset as an "
+        "integer (e.g. -4, 0, +2, etc.). If the location is not available or "
+        "incomplete, respond with NA. Do not add any explanation or extra text.\n"
+        f"Country: {country}\nState: {state}\nCity: {city}\nUTC offset:"
+    )
+
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content.strip()
