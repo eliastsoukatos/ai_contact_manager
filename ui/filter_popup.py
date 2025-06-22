@@ -19,6 +19,7 @@ class FilterPopup(QWidget):
     def __init__(self, values, parent=None):
         super().__init__(parent, Qt.Popup)
         self.setWindowFlags(Qt.Popup)
+        self.setFocusPolicy(Qt.StrongFocus)
         self._all_values = sorted({str(v) for v in values})
         self._build_ui()
         self._populate()
@@ -86,3 +87,9 @@ class FilterPopup(QWidget):
         for i in range(self.list_widget.count()):
             self.list_widget.item(i).setCheckState(Qt.Unchecked)
         self.selection_changed.emit()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.hide()
+        else:
+            super().keyPressEvent(event)
