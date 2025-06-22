@@ -1,4 +1,5 @@
 import csv
+import re
 from datetime import datetime
 from db_manager import DBManager
 
@@ -16,13 +17,10 @@ class CSVImporter:
         Hyphens and slashes are converted to underscores so the resulting
         column names are valid in SQLite without additional quoting.
         """
-        return (
-            header.strip()
-            .lower()
-            .replace(" ", "_")
-            .replace("/", "_")
-            .replace("-", "_")
-        )
+        cleaned = header.strip().lower()
+        # replace any combination of spaces, slashes or hyphens with one underscore
+        cleaned = re.sub(r"[\s/-]+", "_", cleaned)
+        return cleaned
 
     def import_contacts(self):
         """Read the CSV and insert rows into the contacts table."""
