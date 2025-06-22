@@ -2,6 +2,7 @@ import sys
 from PyQt5.QtWidgets import (
     QApplication,
     QFileDialog,
+    QInputDialog,
     QLineEdit,
     QMainWindow,
     QPushButton,
@@ -11,10 +12,44 @@ from PyQt5.QtWidgets import (
     QWidget,
     QComboBox,
 )
+from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from PyQt5.QtCore import Qt
 
 from db_manager import DBManager
 from csv_importer import CSVImporter
+
+
+class CheckableComboBox(QComboBox):
+    """Combo box allowing multiple selections via checkboxes."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setModel(QStandardItemModel(self))
+        self.view().pressed.connect(self._handle_pressed)
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.lineEdit().setPlaceholderText("Filter by tag...")
+
+    def _handle_pressed(self, index):
+        item = self.model().itemFromIndex(index)
+        if item.checkState() == Qt.Checked:
+            item.setCheckState(Qt.Unchecked)
+        else:
+            item.setCheckState(Qt.Checked)
+        self._update_text()
+        self.currentIndexChanged.emit(-1)
+
+    def checked_items(self):
+        return [
+            self.model().item(i).text()
+            for i in range(self.model().rowCount())
+            if self.model().item(i).checkState() == Qt.Checked
+        ]
+
+    def _update_text(self):
+        self.blockSignals(True)
+        self.lineEdit().setText(", ".join(self.checked_items()))
+        self.blockSignals(False)
 
 
 class MainWindow(QMainWindow):
@@ -40,13 +75,21 @@ class MainWindow(QMainWindow):
         self.import_button.clicked.connect(self._import_csv)
         layout.addWidget(self.import_button)
 
+        self.batch_tag_button = QPushButton("Add Tag to All Visible")
+        self.batch_tag_button.clicked.connect(self._batch_add_tag)
+        layout.addWidget(self.batch_tag_button)
+
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search contacts...")
-        self.search_bar.textChanged.connect(self._filter_contacts)
+        self.search_bar.textChanged.connect(self._apply_filters)
         layout.addWidget(self.search_bar)
 
+        self.tag_filter = CheckableComboBox()
+        self.tag_filter.currentIndexChanged.connect(self._apply_filters)
+        layout.addWidget(self.tag_filter)
+
         self.table = QTableWidget()
-        self.table.setColumnCount(11)
+        self.table.setColumnCount(12)
         self.table.setHorizontalHeaderLabels(
             [
                 "mobile",
@@ -60,31 +103,64 @@ class MainWindow(QMainWindow):
                 "contact_disposition",
                 "tags",
                 "state",
+                "status",
             ]
         )
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setEditTriggers(
+            QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed
+        )
+        self.table.itemChanged.connect(self._on_item_changed)
         layout.addWidget(self.table)
 
     def _load_contacts(self):
         """Fetch contacts from the database and display them."""
         self.contacts = self.db.fetch_contacts()
+        self._refresh_tag_filter()
         self._show_contacts(self.contacts)
 
-    def _filter_contacts(self, text):
-        """Filter displayed contacts based on the search text."""
-        text = text.lower()
-        filtered = [
-            c
-            for c in self.contacts
-            if any(
-                text in (c.get(field, "") or "").lower()
-                for field in ("first_name", "last_name", "email", "company_name")
-            )
-        ]
+    def _refresh_tag_filter(self):
+        """Populate tag filter with unique tags from all contacts."""
+        tags = set()
+        for c in self.contacts:
+            if c.get("tags"):
+                tags.update(t.strip() for t in c["tags"].split(",") if t.strip())
+        model = self.tag_filter.model()
+        model.clear()
+        for tag in sorted(tags):
+            item = QStandardItem(tag)
+            item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            item.setData(Qt.Unchecked, Qt.CheckStateRole)
+            model.appendRow(item)
+        self.tag_filter._update_text()
+
+    def _apply_filters(self):
+        """Filter contacts based on search text and selected tags."""
+        text = self.search_bar.text().lower()
+        selected_tags = self.tag_filter.checked_items()
+
+        filtered = []
+        for c in self.contacts:
+            if text and not any(
+                text in (c.get(f, "") or "").lower()
+                for f in ("first_name", "last_name", "email", "company_name")
+            ):
+                continue
+            if selected_tags:
+                contact_tags = [
+                    t.strip()
+                    for t in (c.get("tags", "") or "").split(",")
+                    if t.strip()
+                ]
+                if not any(tag in contact_tags for tag in selected_tags):
+                    continue
+            filtered.append(c)
+
         self._show_contacts(filtered)
 
     def _show_contacts(self, contacts):
         """Populate the table with the given contacts."""
+        self.filtered_contacts = contacts
+        self.table.blockSignals(True)
         self.table.setRowCount(len(contacts))
         for row, contact in enumerate(contacts):
             values = [
@@ -127,13 +203,50 @@ class MainWindow(QMainWindow):
             self.table.setCellWidget(row, 8, combo)
 
             tags_item = QTableWidgetItem(str(contact.get("tags", "")))
-            tags_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            tags_item.setFlags(
+                Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
+            )
+            tags_item.setData(Qt.UserRole, contact.get("profile_id"))
             self.table.setItem(row, 9, tags_item)
 
             state_item = QTableWidgetItem(str(contact.get("state", "")))
             state_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             self.table.setItem(row, 10, state_item)
+
+            status_item = QTableWidgetItem(str(contact.get("status", "")))
+            status_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.table.setItem(row, 11, status_item)
+        self.table.blockSignals(False)
         self.table.resizeColumnsToContents()
+
+    def _on_item_changed(self, item):
+        """Handle inline edits for the tags column."""
+        if item.column() != 9:
+            return
+        contact_id = item.data(Qt.UserRole)
+        if not contact_id:
+            return
+        self.db.update_contact(contact_id, {"tags": item.text()})
+        self.contacts = self.db.fetch_contacts()
+        self._refresh_tag_filter()
+        self._apply_filters()
+
+    def _batch_add_tag(self):
+        """Add a tag to all currently visible contacts."""
+        tag, ok = QInputDialog.getText(self, "Add Tag", "Tag:")
+        if not ok or not tag.strip():
+            return
+        tag = tag.strip()
+        for contact in self.filtered_contacts:
+            tags = [t for t in (contact.get("tags", "") or "").split(",") if t]
+            if tag not in tags:
+                tags.append(tag)
+                self.db.update_contact(
+                    contact.get("profile_id"), {"tags": ",".join(tags)}
+                )
+        self.contacts = self.db.fetch_contacts()
+        self._refresh_tag_filter()
+        self._apply_filters()
 
     def _on_disposition_changed(self, contact_id, disposition):
         """Update disposition in the database and refresh the table."""
@@ -141,7 +254,7 @@ class MainWindow(QMainWindow):
             return
         self.db.update_contact(contact_id, {"contact_disposition": disposition})
         self.contacts = self.db.fetch_contacts()
-        self._filter_contacts(self.search_bar.text())
+        self._apply_filters()
 
     def _import_csv(self):
         """Prompt the user for a CSV file and import its contents."""

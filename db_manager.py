@@ -119,6 +119,7 @@ class DBManager:
             "client_icp": "TEXT",
             "tags": "TEXT",
             "added_timestamp": "TEXT",
+            "status": "TEXT",
         }
 
         existing_columns = {
