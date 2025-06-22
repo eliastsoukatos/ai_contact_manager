@@ -41,6 +41,8 @@ class CSVImporter:
                 if not any(cell.strip() for cell in row):
                     continue
                 data = dict(zip(mapped_headers, row))
+                # Ensure company_alias starts empty on import
+                data["company_alias"] = ""
                 if not data.get("added_timestamp"):
                     data["added_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.db_manager.insert_contact(data)
