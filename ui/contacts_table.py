@@ -19,6 +19,7 @@ from db_manager import DBManager
 from config.settings import get_settings, save_settings
 from ui.filter_popup import FilterPopup
 from ui.filter_header import FilterHeader
+from ui.tag_tools import TagSelectionDialog, ModeIndicator
 
 
 class ContactsTableWidget(QWidget):
@@ -61,12 +62,18 @@ class ContactsTableWidget(QWidget):
         self.filters = {}
         self.sort_column = None
         self.sort_order = Qt.AscendingOrder
+        self.quick_mode = None
+        self.quick_tag = ""
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
+
+        self.mode_indicator = ModeIndicator(self._exit_quick_mode)
+        self.mode_indicator.hide()
+        layout.addWidget(self.mode_indicator)
 
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.HEADERS))
@@ -85,6 +92,7 @@ class ContactsTableWidget(QWidget):
         header.setContextMenuPolicy(Qt.CustomContextMenu)
         header.customContextMenuRequested.connect(self._show_filter_context)
         self._filter_header = header
+        self.table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self.table)
 
         self._apply_layout()
@@ -256,37 +264,69 @@ class ContactsTableWidget(QWidget):
         self._apply_filters()
         self._status_callback("Status updated")
 
+    def _get_all_tags(self):
+        tags = set()
+        for c in self.contacts:
+            tags.update(t.strip() for t in str(c.get("tags", "")).split(",") if t.strip())
+        return sorted(tags)
+
     def _batch_add_tag(self):
-        tag, ok = QInputDialog.getText(self, "Add Tag", "Tag:")
-        if not ok or not tag.strip():
+        dialog = TagSelectionDialog(self._get_all_tags(), title="Add Tag to All Visible Contacts", allow_new=True, parent=self)
+        if dialog.exec() != QDialog.Accepted:
             return
-        tag = tag.strip()
+        tag = dialog.selected_tag()
+        if not tag:
+            return
         for contact in self.filtered_contacts:
-            tags = [t for t in (contact.get("tags", "") or "").split(",") if t]
-            if tag not in tags:
-                tags.append(tag)
-                self.db.update_contact(
-                    contact.get("profile_id"), {"tags": ",".join(tags)}
-                )
+            self.db.add_tag(contact.get("profile_id"), tag)
         self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Tag added")
 
     def _batch_remove_tag(self):
-        tag, ok = QInputDialog.getText(self, "Remove Tag", "Tag to remove:")
-        if not ok or not tag.strip():
+        dialog = TagSelectionDialog(self._get_all_tags(), title="Remove Tag from All Visible Contacts", allow_new=False, parent=self)
+        if dialog.exec() != QDialog.Accepted:
             return
-        tag = tag.strip()
+        tag = dialog.selected_tag()
+        if not tag:
+            return
         for contact in self.filtered_contacts:
-            tags = [t for t in (contact.get("tags", "") or "").split(",") if t]
-            if tag in tags:
-                tags = [t for t in tags if t != tag]
-                self.db.update_contact(
-                    contact.get("profile_id"), {"tags": ",".join(tags)}
-                )
+            self.db.remove_tag(contact.get("profile_id"), tag)
         self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Tag removed")
+
+    def start_quick_tag_mode(self):
+        dialog = TagSelectionDialog(self._get_all_tags(), title="Select Tag", allow_new=False, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        tag = dialog.selected_tag()
+        if not tag:
+            return
+        self.quick_mode = "add"
+        self.quick_tag = tag
+        self.mode_indicator.label.setText(f"Quick Tag mode: {tag}")
+        self.mode_indicator.show()
+        self._status_callback("Quick Tag mode active")
+
+    def start_quick_remove_mode(self):
+        dialog = TagSelectionDialog(self._get_all_tags(), title="Select Tag to Remove", allow_new=False, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        tag = dialog.selected_tag()
+        if not tag:
+            return
+        self.quick_mode = "remove"
+        self.quick_tag = tag
+        self.mode_indicator.label.setText(f"Remove Tag mode: {tag}")
+        self.mode_indicator.show()
+        self._status_callback("Remove Tag mode active")
+
+    def _exit_quick_mode(self):
+        self.quick_mode = None
+        self.quick_tag = ""
+        self.mode_indicator.hide()
+        self._status_callback("Quick mode exited")
 
     def _batch_set_status(self):
         status, ok = QInputDialog.getItem(
@@ -403,6 +443,21 @@ class ContactsTableWidget(QWidget):
         if value:
             QApplication.clipboard().setText(value)
             self._status_callback(f"Copied '{value}' to clipboard")
+
+    def _on_cell_clicked(self, row, column):
+        if self.quick_mode not in {"add", "remove"}:
+            return
+        if self.HEADERS[column] != "tags":
+            return
+        contact = self.filtered_contacts[row]
+        if self.quick_mode == "add":
+            self.db.add_tag(contact.get("profile_id"), self.quick_tag)
+            self._status_callback("Tag added")
+        else:
+            self.db.remove_tag(contact.get("profile_id"), self.quick_tag)
+            self._status_callback("Tag removed")
+        self.contacts = self.db.fetch_contacts()
+        self._apply_filters()
 
     def _load_layout(self):
         settings = get_settings().get("table_layout", {})
