@@ -54,6 +54,11 @@ class MainWindow(QMainWindow):
         import_action.triggered.connect(self._import_csv)
         toolbar.addAction(import_action)
 
+        export_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), "Export View", self)
+        export_action.setToolTip("Export visible contacts to CSV")
+        export_action.triggered.connect(self.table_widget.export_view)
+        toolbar.addAction(export_action)
+
         add_tag_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogNewFolder), "Add Tag to All", self)
         add_tag_action.setToolTip("Add tag to all visible contacts")
         add_tag_action.triggered.connect(self.table_widget._batch_add_tag)
