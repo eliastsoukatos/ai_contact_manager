@@ -11,6 +11,7 @@ AI_FIELDS = [
     "area_of_business",
     "most_relevant_summit",
     "client_icp",
+    "company_alias",
     "time_zone_utc",
 ]
 
@@ -125,6 +126,24 @@ def enrich_database(
                             status_callback(str(exc))
                         step += 1
                         progress_callback(step, total)
+                if not c.get("company_alias"):
+                    try:
+                        result = run_prompt(
+                            "company_alias",
+                            {
+                                "company_name": c.get("company_name", ""),
+                                "company_description": c.get(
+                                    "company_description", ""
+                                ),
+                            },
+                        )
+                        db.update_contact(
+                            c["profile_id"], {"company_alias": result}
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        status_callback(str(exc))
+                    step += 1
+                    progress_callback(step, total)
                 if not c.get("time_zone_utc"):
                     try:
                         result = lookup_utc_offset(
