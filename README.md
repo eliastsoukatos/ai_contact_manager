@@ -10,3 +10,30 @@ A small demo application for importing Cognism CSV files into a SQLite database 
 * **main.py** – launches the application window and wires up the components. The toolbar now includes a **Settings** button to open the configuration dialog.
 
 Import contacts by creating a `CSVImporter` instance pointing to your CSV file and calling `import_contacts()` or using the **Import CSV** button in the GUI.
+
+## Using OpenAI
+
+Configure your OpenAI API key and preferred model in the **Settings** dialog. The application uses the official `openai` Python library with the following pattern:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+completion = client.chat.completions.create(
+    model="gpt-4.1",
+    messages=[{"role": "user", "content": "Write a one-sentence bedtime story about a unicorn."}]
+)
+
+print(completion.choices[0].message.content)
+```
+
+Available models you can select are:
+
+- `gpt-4.1`
+- `gpt-4.1-mini`
+- `gpt-4.1-nano`
+- `gpt-4o-mini`
+- `o3-mini`
+
+Use only the base model name (e.g. `"gpt-4.1"`) without any date suffixes.

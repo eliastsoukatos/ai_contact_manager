@@ -44,8 +44,14 @@ class SettingsDialog(QDialog):
 
         # Model selection
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["gpt-3.5-turbo", "gpt-4"])
-        self.model_combo.setCurrentText(self._settings.get("llm_model", "gpt-3.5-turbo"))
+        self.model_combo.addItems([
+            "gpt-4.1",
+            "gpt-4.1-mini",
+            "gpt-4.1-nano",
+            "gpt-4o-mini",
+            "o3-mini",
+        ])
+        self.model_combo.setCurrentText(self._settings.get("llm_model", "gpt-4.1"))
         self.model_combo.currentTextChanged.connect(
             lambda text: update_setting("llm_model", text)
         )

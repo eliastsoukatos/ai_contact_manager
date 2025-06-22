@@ -1,4 +1,4 @@
-import openai
+from openai import OpenAI
 from config.settings import get_settings
 
 
@@ -26,10 +26,10 @@ def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = Tr
         raise RuntimeError(f"Prompt template '{prompt_name}' not configured")
     variables = variables or {}
     prompt = template.format(**variables)
-    openai.api_key = api_key
-    response = openai.ChatCompletion.create(
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
     )
-    text = response.choices[0].message["content"]
+    text = response.choices[0].message.content
     return text.strip() if clean else text
