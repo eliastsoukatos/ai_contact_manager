@@ -228,3 +228,74 @@ class DBManager:
         rows = cursor.fetchall()
         column_names = [desc[0] for desc in cursor.description]
         return [dict(zip(column_names, row)) for row in rows]
+
+    def add_tag(self, contact_id, tag):
+        """Add a tag to a contact if it does not already exist."""
+        self.create_contacts_table()
+        conn = self.connect()
+
+        row = conn.execute(
+            "SELECT tags FROM contacts WHERE profile_id = ?",
+            (contact_id,),
+        ).fetchone()
+        if row is None:
+            return
+
+        existing = []
+        if row[0]:
+            existing = [t for t in row[0].split(',') if t]
+        if tag in existing:
+            return
+
+        existing.append(tag)
+        new_tags = ','.join(existing)
+        conn.execute(
+            "UPDATE contacts SET tags = ? WHERE profile_id = ?",
+            (new_tags, contact_id),
+        )
+        conn.commit()
+
+    def remove_tag(self, contact_id, tag):
+        """Remove a tag from a contact."""
+        self.create_contacts_table()
+        conn = self.connect()
+
+        row = conn.execute(
+            "SELECT tags FROM contacts WHERE profile_id = ?",
+            (contact_id,),
+        ).fetchone()
+        if row is None or not row[0]:
+            return
+
+        tags = [t for t in row[0].split(',') if t]
+        if tag not in tags:
+            return
+
+        tags = [t for t in tags if t != tag]
+        new_tags = ','.join(tags)
+        conn.execute(
+            "UPDATE contacts SET tags = ? WHERE profile_id = ?",
+            (new_tags, contact_id),
+        )
+        conn.commit()
+
+    def get_contacts_by_tag(self, tag):
+        """Return all contacts that have the given tag."""
+        self.create_contacts_table()
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        sql = (
+            "SELECT * FROM contacts WHERE tags = ?"
+            " OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?"
+        )
+        params = (
+            tag,
+            f"{tag},%",
+            f"%,{tag}",
+            f"%,{tag},%",
+        )
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        return [dict(zip(column_names, row)) for row in rows]
