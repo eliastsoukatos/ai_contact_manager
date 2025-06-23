@@ -3,10 +3,9 @@ import subprocess
 import sys
 import platform
 import signal
-import socket
 import shutil
 
-DEFAULT_DSN = "postgresql://contacts_user:contacts_pass@localhost/contacts_db"
+DEFAULT_DSN = "postgresql://postgres:CBSIX1KWPhWuZB@localhost/contacts_db?sslmode=disable"
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -18,75 +17,62 @@ else:
 BIN_PATH = os.path.join(PROJECT_ROOT, BIN_NAME)
 SRC_DIR = os.path.join(PROJECT_ROOT, "go_backend")
 
-# --- Windows: Add bin to PATH if gcc is present ---
-def setup_gcc_path():
+# --- Add gcc and psql to PATH ---
+def setup_tool_paths():
     if platform.system() == "Windows":
+        # Add GCC
         gcc_path = os.path.join(PROJECT_ROOT, "bin", "gcc.exe")
         if os.path.exists(gcc_path):
-            bin_dir = os.path.dirname(gcc_path)
-            os.environ["PATH"] = f"{bin_dir};{os.environ['PATH']}"
-            print(f"[INFO] Added {bin_dir} to PATH for gcc.")
+            gcc_bin = os.path.dirname(gcc_path)
+            os.environ["PATH"] = f"{gcc_bin};{os.environ['PATH']}"
+            print(f"[INFO] Added {gcc_bin} to PATH for gcc.")
         else:
-            print("[WARNING] gcc.exe not found in ./bin. Make sure your compiler is available in PATH.")
+            print("[WARNING] gcc.exe not found in ./bin.")
 
-# --- Kill any process using port 8081 ---
+        # Add PostgreSQL
+        pg_path = r"C:\Program Files\PostgreSQL\17\bin"
+        if os.path.exists(os.path.join(pg_path, "psql.exe")):
+            os.environ["PATH"] = f"{pg_path};{os.environ['PATH']}"
+            print(f"[INFO] Added {pg_path} to PATH for PostgreSQL.")
+        else:
+            print("[ERROR] PostgreSQL tools not found in default directory.")
+            print("        Please install from https://www.postgresql.org/download/")
+    else:
+        print("[INFO] Assuming system has gcc and psql installed via PATH.")
+
+# --- Kill process on port ---
 def kill_process_on_port(port):
     try:
         if platform.system() == "Windows":
             cmd = f'for /f "tokens=5" %a in (\'netstat -ano ^| findstr :{port}\') do taskkill /PID %a /F'
             os.system(cmd)
         else:
-            # Unix: find pid and kill
-            output = subprocess.check_output(
-                f"lsof -ti tcp:{port}", shell=True, text=True
-            ).strip()
+            output = subprocess.check_output(f"lsof -ti tcp:{port}", shell=True, text=True).strip()
             if output:
                 for pid in output.splitlines():
                     os.kill(int(pid), signal.SIGTERM)
     except Exception as e:
         print(f"[WARN] Could not kill process on port {port}: {e}")
 
-# --- Ensure PostgreSQL is installed and database exists ---
+# --- Ensure PostgreSQL and DB exist ---
 def ensure_postgres():
     dsn = os.environ.get("POSTGRES_DSN", DEFAULT_DSN)
     if shutil.which("psql") is None:
-        print(
-            "[ERROR] PostgreSQL not found. Please install it from https://www.postgresql.org/download/"
-        )
+        print("[ERROR] PostgreSQL not found. Please install it from https://www.postgresql.org/download/")
         return dsn
 
     try:
-        subprocess.run(["psql", "-d", "postgres", "-c", f"CREATE DATABASE contacts_db"], check=False)
-        subprocess.run(
-            [
-                "psql",
-                "-d",
-                "postgres",
-                "-c",
-                "CREATE USER contacts_user WITH PASSWORD 'contacts_pass'",
-            ],
-            check=False,
-        )
-        subprocess.run(
-            [
-                "psql",
-                "-d",
-                "postgres",
-                "-c",
-                "GRANT ALL PRIVILEGES ON DATABASE contacts_db TO contacts_user",
-            ],
-            check=False,
-        )
+        subprocess.run(["psql", "-U", "postgres", "-c", "CREATE DATABASE contacts_db"], check=False)
+        subprocess.run(["psql", "-U", "postgres", "-c", "CREATE USER contacts_user WITH PASSWORD 'CBSIX1KWPhWuZB'"], check=False)
+        subprocess.run(["psql", "-U", "postgres", "-c", "GRANT ALL PRIVILEGES ON DATABASE contacts_db TO contacts_user"], check=False)
     except Exception as exc:
-        print(f"[WARN] Could not initialize PostgreSQL: {exc}")
+        print(f"[WARN] PostgreSQL init failed: {exc}")
     return dsn
 
 # --- Compile Go binary ---
 def build_go_backend():
     print("[INFO] Building Go backend...")
-    result = subprocess.run(
-        ["go", "build", "-o", BIN_PATH, os.path.join(SRC_DIR, "main.go")]
-    )
+    result = subprocess.run(["go", "build", "-o", BIN_PATH, os.path.join(SRC_DIR, "main.go")])
     if result.returncode != 0:
         print("[ERROR] go build failed")
         sys.exit(1)
@@ -99,13 +85,13 @@ def start_backend():
 if __name__ == "__main__":
     print("Checking for existing process on port 8081...")
     kill_process_on_port(8081)
-    setup_gcc_path()
+    setup_tool_paths()
     dsn = ensure_postgres()
     os.environ.setdefault("POSTGRES_DSN", dsn)
 
     try:
-        import psycopg2  # type: ignore
-    except Exception:
+        import psycopg2
+    except ImportError:
         subprocess.run([sys.executable, "-m", "pip", "install", "psycopg2-binary"], check=False)
 
     build_go_backend()
@@ -115,4 +101,3 @@ if __name__ == "__main__":
         p.wait()
     except KeyboardInterrupt:
         print("Shutting down backend...")
-        pass
