@@ -128,7 +128,6 @@ class ContactsTableWidget(QWidget):
         self._apply_layout()
 
     def load_contacts(self):
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
 
     def set_search_text(self, text: str):
@@ -137,33 +136,18 @@ class ContactsTableWidget(QWidget):
 
 
     def _apply_filters(self):
-        text = self.search_text.lower()
-
-        visible_fields = [h for h in self.HEADERS if self.column_visibility.get(h, True)]
-
-        filtered = []
-        for c in self.contacts:
-            if text and not any(
-                text in str(c.get(f, "")).lower() for f in visible_fields
-            ):
-                continue
-
-            match = True
-            for field, values in self.filters.items():
-                val = str(c.get(field, ""))
-                if field == "tags":
-                    contact_tags = [t.strip() for t in val.split(",") if t.strip()]
-                    if not any(t in values for t in contact_tags):
-                        match = False
-                        break
-                else:
-                    if val not in values:
-                        match = False
-                        break
-            if match:
-                filtered.append(c)
-
-        self._show_contacts(filtered)
+        sort_by = ""
+        if self.sort_column is not None:
+            sort_by = self.HEADERS[self.sort_column]
+        sort_order = "desc" if self.sort_order == Qt.DescendingOrder else "asc"
+        filters = {k: list(v) for k, v in self.filters.items()}
+        self.contacts = self.db.fetch_contacts(
+            filters=filters,
+            search=self.search_text,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        self._show_contacts(self.contacts)
 
     def _show_contacts(self, contacts):
         self.filtered_contacts = contacts
@@ -285,7 +269,6 @@ class ContactsTableWidget(QWidget):
         if not contact_id:
             return
         self.db.update_contact(contact_id, {header: item.text()})
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback(f"{header.replace('_', ' ').title()} updated")
 
@@ -297,7 +280,6 @@ class ContactsTableWidget(QWidget):
             contact_id,
             {"contact_disposition": disposition, "status": status},
         )
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Disposition updated")
 
@@ -305,13 +287,13 @@ class ContactsTableWidget(QWidget):
         if not contact_id:
             return
         self.db.update_contact(contact_id, {"status": status})
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Status updated")
 
     def _get_all_tags(self):
         tags = set(self.session_tags)
-        for c in self.contacts:
+        contacts = self.db.fetch_contacts()
+        for c in contacts:
             tags.update(t.strip() for t in str(c.get("tags", "")).split(",") if t.strip())
         return sorted(tags)
 
@@ -325,7 +307,6 @@ class ContactsTableWidget(QWidget):
         self.session_tags.add(tag)
         for contact in self.filtered_contacts:
             self.db.add_tag(contact.get("profile_id"), tag)
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Tag added")
 
@@ -338,7 +319,6 @@ class ContactsTableWidget(QWidget):
             return
         for contact in self.filtered_contacts:
             self.db.remove_tag(contact.get("profile_id"), tag)
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Tag removed")
 
@@ -381,7 +361,6 @@ class ContactsTableWidget(QWidget):
             return
         for contact in self.filtered_contacts:
             self.db.update_contact(contact.get("profile_id"), {"status": status})
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self._status_callback("Status updated for selection")
 
@@ -413,7 +392,8 @@ class ContactsTableWidget(QWidget):
             return
         field = self.HEADERS[logical]
         values = set()
-        for c in self.contacts:
+        contacts = self.db.fetch_contacts()
+        for c in contacts:
             val = c.get(field, "")
             if field == "tags":
                 values.update(t.strip() for t in str(val).split(",") if t.strip())
@@ -493,7 +473,6 @@ class ContactsTableWidget(QWidget):
                 return
             contact = self.filtered_contacts[row]
             self.db.add_tag(contact.get("profile_id"), self.quick_tag)
-            self.contacts = self.db.fetch_contacts()
             scroll = self.table.verticalScrollBar().value()
             self._apply_filters()
             self.table.verticalScrollBar().setValue(scroll)
@@ -504,7 +483,6 @@ class ContactsTableWidget(QWidget):
             return
         scroll = self.table.verticalScrollBar().value()
         self.db.remove_tag(contact_id, tag)
-        self.contacts = self.db.fetch_contacts()
         self._apply_filters()
         self.table.verticalScrollBar().setValue(scroll)
         self._status_callback("Tag removed")

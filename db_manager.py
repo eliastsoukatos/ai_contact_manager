@@ -187,54 +187,69 @@ class DBManager:
         conn.execute("DELETE FROM contacts WHERE profile_id = ?", (contact_id,))
         conn.commit()
 
-    def fetch_contacts(self, filters=None, limit=None, offset=None):
-        """Fetch contacts from the database.
+    def fetch_contacts(
+        self,
+        filters=None,
+        search="",
+        sort_by="",
+        sort_order="asc",
+        limit=None,
+        offset=None,
+    ):
+        """Fetch contacts via the Go API backend."""
+        import requests
 
-        Parameters
-        ----------
-        filters : dict, optional
-            Mapping of column names to values to filter the results.
+        payload = {
+            "filters": filters or {},
+            "search": search or "",
+            "sort_by": sort_by or "",
+            "sort_order": sort_order or "asc",
+            "limit": limit or 0,
+            "offset": offset or 0,
+        }
 
-        Returns
-        -------
-        list[dict]
-            List of contacts represented as dictionaries.
-        """
-        self.create_contacts_table()
-        conn = self.connect()
-        cursor = conn.cursor()
+        try:
+            resp = requests.post("http://localhost:8081/contacts", json=payload, timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("contacts", [])
+        except Exception:
+            # Fallback to direct SQLite query if the service is unavailable
+            self.create_contacts_table()
+            conn = self.connect()
+            cursor = conn.cursor()
 
-        sql = "SELECT * FROM contacts"
-        params = []
+            sql = "SELECT * FROM contacts"
+            params = []
 
-        if filters:
-            # Validate filter columns against existing table columns
-            valid_columns = {
-                row[1] for row in conn.execute("PRAGMA table_info(contacts)")
-            }
-            clauses = []
-            for column, value in filters.items():
-                if column not in valid_columns:
-                    raise ValueError(f"Invalid column name: {column}")
-                clauses.append(f'"{column}" = ?')
-                params.append(value)
-            if clauses:
-                sql += " WHERE " + " AND ".join(clauses)
+            if filters:
+                valid_columns = {row[1] for row in conn.execute("PRAGMA table_info(contacts)")}
+                clauses = []
+                for column, value in filters.items():
+                    if column not in valid_columns:
+                        raise ValueError(f"Invalid column name: {column}")
+                    clauses.append(f'"{column}" = ?')
+                    params.append(value)
+                if clauses:
+                    sql += " WHERE " + " AND ".join(clauses)
 
-        if limit is not None:
-            sql += " LIMIT ?"
-            params.append(limit)
-            if offset is not None:
-                sql += " OFFSET ?"
+            if sort_by:
+                sql += f' ORDER BY "{sort_by}" {"DESC" if sort_order == "desc" else "ASC"}'
+
+            if limit is not None:
+                sql += " LIMIT ?"
+                params.append(limit)
+                if offset is not None:
+                    sql += " OFFSET ?"
+                    params.append(offset)
+            elif offset is not None:
+                sql += " LIMIT -1 OFFSET ?"
                 params.append(offset)
-        elif offset is not None:
-            sql += " LIMIT -1 OFFSET ?"
-            params.append(offset)
 
-        cursor.execute(sql, params)
-        rows = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]
-        return [dict(zip(column_names, row)) for row in rows]
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            column_names = [desc[0] for desc in cursor.description]
+            return [dict(zip(column_names, row)) for row in rows]
 
     def add_tag(self, contact_id, tag):
         """Add a tag to a contact if it does not already exist."""
