@@ -46,6 +46,7 @@ def load_settings():
         _settings = DEFAULT_SETTINGS.copy()
     # Ensure all keys exist
     _merge_defaults(_settings, DEFAULT_SETTINGS)
+    _deserialize_sets(_settings)
     return _settings
 
 
@@ -55,7 +56,7 @@ def save_settings():
         return
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(_settings, f, indent=2)
+        json.dump(_serialize_sets(_settings), f, indent=2)
 
 
 def get_settings():
@@ -83,6 +84,24 @@ def _merge_defaults(target, defaults):
             _merge_defaults(target[key], val)
         else:
             target.setdefault(key, val)
+
+
+def _serialize_sets(obj):
+    """Recursively convert sets in the settings to lists for JSON."""
+    if isinstance(obj, dict):
+        return {k: _serialize_sets(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialize_sets(v) for v in obj]
+    if isinstance(obj, set):
+        return list(obj)
+    return obj
+
+
+def _deserialize_sets(obj):
+    """Convert lists back to sets for known set-containing fields."""
+    table_filters = obj.get("table_filters")
+    if isinstance(table_filters, dict):
+        obj["table_filters"] = {k: set(v) for k, v in table_filters.items()}
 
 # Load settings on import
 load_settings()

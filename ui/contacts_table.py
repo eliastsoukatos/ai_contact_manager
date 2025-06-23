@@ -514,7 +514,10 @@ class ContactsTableWidget(QWidget):
         self.column_visibility.update(settings.get("visibility", {}))
         self.column_order = settings.get("order", self.HEADERS[:])
         self.column_widths = settings.get("widths", {})
-        self.filters = get_settings().get("table_filters", {})
+        raw_filters = get_settings().get("table_filters", {})
+        self.filters = {
+            k: set(v) if not isinstance(v, set) else v for k, v in raw_filters.items()
+        }
         sort = get_settings().get("table_sort", {})
         column = sort.get("column")
         if column in self.HEADERS:
