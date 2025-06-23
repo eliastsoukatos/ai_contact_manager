@@ -1,10 +1,15 @@
 import os
 import subprocess
 import sys
+import platform
 
-BIN_NAME = 'go_backend'
+if platform.system() == "Windows":
+    BIN_NAME = 'go_backend.exe'
+else:
+    BIN_NAME = 'go_backend'
 BIN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), BIN_NAME)
 SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'go_backend')
+
 
 
 def ensure_built():
