@@ -62,7 +62,7 @@ def export_contacts(
     """
     os.makedirs(export_dir, exist_ok=True)
 
-    header_row = ["mobile_phone"] + [
+    header_row = ["phone_number"] + [
         _snake_case(h) for h in headers if h != "mobile"
     ]
 
