@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 from PyQt5.QtGui import QBrush
-from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtCore import Qt, QPoint, QObject, QThread, pyqtSignal, pyqtSlot
 
 import os
 
@@ -32,6 +32,30 @@ from utils import (
     status_to_color,
     clean_phone_number,
 )
+
+
+class FetchContactsWorker(QObject):
+    """Worker object to fetch contacts in a background thread."""
+
+    finished = pyqtSignal(list)
+
+    def __init__(self, db, filters=None, search="", sort_by="", sort_order="asc"):
+        super().__init__()
+        self._db = db
+        self._filters = filters
+        self._search = search
+        self._sort_by = sort_by
+        self._sort_order = sort_order
+
+    @pyqtSlot()
+    def run(self):
+        contacts = self._db.fetch_contacts(
+            filters=self._filters,
+            search=self._search,
+            sort_by=self._sort_by,
+            sort_order=self._sort_order,
+        )
+        self.finished.emit(contacts)
 
 
 class ContactsTableWidget(QWidget):
@@ -78,9 +102,38 @@ class ContactsTableWidget(QWidget):
         self.quick_mode = None
         self.quick_tag = ""
         self.session_tags = set()
+        self._fetch_thread = None
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
+
+    def _start_worker(self, worker, callback):
+        thread = QThread()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(callback)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.start()
+        return thread
+
+    def _fetch_contacts_async(
+        self,
+        callback,
+        filters=None,
+        search="",
+        sort_by="",
+        sort_order="asc",
+    ):
+        worker = FetchContactsWorker(
+            self.db,
+            filters=filters,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        return self._start_worker(worker, callback)
 
     def _set_disposition_style(self, combo: QComboBox, disposition: str):
         """Apply background color to the disposition combo box."""
@@ -141,13 +194,21 @@ class ContactsTableWidget(QWidget):
             sort_by = self.HEADERS[self.sort_column]
         sort_order = "desc" if self.sort_order == Qt.DescendingOrder else "asc"
         filters = {k: list(v) for k, v in self.filters.items()}
-        self.contacts = self.db.fetch_contacts(
+        if self._fetch_thread:
+            self._fetch_thread.quit()
+            self._fetch_thread.wait()
+
+        def _on_fetched(contacts):
+            self.contacts = contacts
+            self._show_contacts(contacts)
+
+        self._fetch_thread = self._fetch_contacts_async(
+            _on_fetched,
             filters=filters,
             search=self.search_text,
             sort_by=sort_by,
             sort_order=sort_order,
         )
-        self._show_contacts(self.contacts)
 
     def _show_contacts(self, contacts):
         self.filtered_contacts = contacts
@@ -290,51 +351,62 @@ class ContactsTableWidget(QWidget):
         self._apply_filters()
         self._status_callback("Status updated")
 
-    def _get_all_tags(self):
-        tags = set(self.session_tags)
-        contacts = self.db.fetch_contacts()
-        for c in contacts:
-            tags.update(t.strip() for t in str(c.get("tags", "")).split(",") if t.strip())
-        return sorted(tags)
+    def _get_all_tags_async(self, callback):
+        def _on_contacts(contacts):
+            tags = set(self.session_tags)
+            for c in contacts:
+                tags.update(t.strip() for t in str(c.get("tags", "")).split(",") if t.strip())
+            callback(sorted(tags))
+
+        self._fetch_contacts_async(_on_contacts)
 
     def _batch_add_tag(self):
-        dialog = TagSelectionDialog(self._get_all_tags(), title="Add Tag to All Visible Contacts", allow_new=True, parent=self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-        tag = dialog.selected_tag()
-        if not tag:
-            return
-        self.session_tags.add(tag)
-        for contact in self.filtered_contacts:
-            self.db.add_tag(contact.get("profile_id"), tag)
-        self._apply_filters()
-        self._status_callback("Tag added")
+        def _on_tags(tags):
+            dialog = TagSelectionDialog(tags, title="Add Tag to All Visible Contacts", allow_new=True, parent=self)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            tag = dialog.selected_tag()
+            if not tag:
+                return
+            self.session_tags.add(tag)
+            for contact in self.filtered_contacts:
+                self.db.add_tag(contact.get("profile_id"), tag)
+            self._apply_filters()
+            self._status_callback("Tag added")
+
+        self._get_all_tags_async(_on_tags)
 
     def _batch_remove_tag(self):
-        dialog = TagSelectionDialog(self._get_all_tags(), title="Remove Tag from All Visible Contacts", allow_new=False, parent=self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-        tag = dialog.selected_tag()
-        if not tag:
-            return
-        for contact in self.filtered_contacts:
-            self.db.remove_tag(contact.get("profile_id"), tag)
-        self._apply_filters()
-        self._status_callback("Tag removed")
+        def _on_tags(tags):
+            dialog = TagSelectionDialog(tags, title="Remove Tag from All Visible Contacts", allow_new=False, parent=self)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            tag = dialog.selected_tag()
+            if not tag:
+                return
+            for contact in self.filtered_contacts:
+                self.db.remove_tag(contact.get("profile_id"), tag)
+            self._apply_filters()
+            self._status_callback("Tag removed")
+
+        self._get_all_tags_async(_on_tags)
 
     def start_quick_tag_mode(self):
-        dialog = TagSelectionDialog(self._get_all_tags(), title="Select Tag", allow_new=True, parent=self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-        tag = dialog.selected_tag()
-        if not tag:
-            return
-        self.session_tags.add(tag)
-        self.quick_mode = "add"
-        self.quick_tag = tag
-        self.mode_indicator.label.setText(f"Quick Tag mode: {tag}")
-        self.mode_indicator.show()
-        self._status_callback("Quick Tag mode active")
+        def _on_tags(tags):
+            dialog = TagSelectionDialog(tags, title="Select Tag", allow_new=True, parent=self)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            tag = dialog.selected_tag()
+            if not tag:
+                return
+            self.session_tags.add(tag)
+            self.quick_mode = "add"
+            self.quick_tag = tag
+            self.mode_indicator.label.setText(f"Quick Tag mode: {tag}")
+            self.mode_indicator.show()
+            self._status_callback("Quick Tag mode active")
+
+        self._get_all_tags_async(_on_tags)
 
     def start_quick_remove_mode(self):
         self.quick_mode = "remove"
@@ -391,29 +463,35 @@ class ContactsTableWidget(QWidget):
         if logical < 0:
             return
         field = self.HEADERS[logical]
-        values = set()
-        contacts = self.db.fetch_contacts()
-        for c in contacts:
-            val = c.get(field, "")
-            if field == "tags":
-                values.update(t.strip() for t in str(val).split(",") if t.strip())
-            else:
-                values.add(str(val))
-        popup = FilterPopup(values, self)
-        if field in self.filters:
-            popup.set_selected(self.filters[field])
-        popup.selection_changed.connect(
-            lambda f=field, p=popup: self._on_filter_changed(f, p)
-        )
-        popup.sort_requested.connect(
-            lambda order, col=logical: self._on_sort_requested(col, order, popup)
-        )
-        section_left = header.sectionViewportPosition(logical)
-        global_pos = header.mapToGlobal(QPoint(section_left, header.height()))
-        popup.move(global_pos)
-        popup.closed.connect(lambda: self._filter_header.set_active_section(None))
+
+        def _show_popup(values):
+            popup = FilterPopup(values, self)
+            if field in self.filters:
+                popup.set_selected(self.filters[field])
+            popup.selection_changed.connect(
+                lambda f=field, p=popup: self._on_filter_changed(f, p)
+            )
+            popup.sort_requested.connect(
+                lambda order, col=logical: self._on_sort_requested(col, order, popup)
+            )
+            section_left = header.sectionViewportPosition(logical)
+            global_pos = header.mapToGlobal(QPoint(section_left, header.height()))
+            popup.move(global_pos)
+            popup.closed.connect(lambda: self._filter_header.set_active_section(None))
+            popup.show()
+
+        def _process_contacts(contacts):
+            values = set()
+            for c in contacts:
+                val = c.get(field, "")
+                if field == "tags":
+                    values.update(t.strip() for t in str(val).split(",") if t.strip())
+                else:
+                    values.add(str(val))
+            _show_popup(values)
+
         self._filter_header.set_active_section(logical)
-        popup.show()
+        self._fetch_contacts_async(_process_contacts)
 
     def _show_filter_context(self, pos):
         header = self.table.horizontalHeader()
