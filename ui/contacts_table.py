@@ -102,6 +102,7 @@ class ContactsTableWidget(QWidget):
         self.quick_mode = None
         self.quick_tag = ""
         self.session_tags = set()
+        self._value_cache = {}
         self._fetch_thread = None
         self._load_layout()
         self._setup_ui()
@@ -182,6 +183,7 @@ class ContactsTableWidget(QWidget):
 
     def load_contacts(self):
         self._apply_filters()
+        self._refresh_value_cache()
 
     def set_search_text(self, text: str):
         self.search_text = text
@@ -331,6 +333,7 @@ class ContactsTableWidget(QWidget):
             return
         self.db.update_contact(contact_id, {header: item.text()})
         self._apply_filters()
+        self._refresh_value_cache()
         self._status_callback(f"{header.replace('_', ' ').title()} updated")
 
     def _on_disposition_changed(self, contact_id, disposition):
@@ -342,6 +345,7 @@ class ContactsTableWidget(QWidget):
             {"contact_disposition": disposition, "status": status},
         )
         self._apply_filters()
+        self._refresh_value_cache()
         self._status_callback("Disposition updated")
 
     def _on_status_changed(self, contact_id, status):
@@ -349,6 +353,7 @@ class ContactsTableWidget(QWidget):
             return
         self.db.update_contact(contact_id, {"status": status})
         self._apply_filters()
+        self._refresh_value_cache()
         self._status_callback("Status updated")
 
     def _get_all_tags_async(self, callback):
@@ -372,6 +377,7 @@ class ContactsTableWidget(QWidget):
             for contact in self.filtered_contacts:
                 self.db.add_tag(contact.get("profile_id"), tag)
             self._apply_filters()
+            self._refresh_value_cache()
             self._status_callback("Tag added")
 
         self._get_all_tags_async(_on_tags)
@@ -387,6 +393,7 @@ class ContactsTableWidget(QWidget):
             for contact in self.filtered_contacts:
                 self.db.remove_tag(contact.get("profile_id"), tag)
             self._apply_filters()
+            self._refresh_value_cache()
             self._status_callback("Tag removed")
 
         self._get_all_tags_async(_on_tags)
@@ -434,6 +441,7 @@ class ContactsTableWidget(QWidget):
         for contact in self.filtered_contacts:
             self.db.update_contact(contact.get("profile_id"), {"status": status})
         self._apply_filters()
+        self._refresh_value_cache()
         self._status_callback("Status updated for selection")
 
     def _customize_columns(self):
@@ -463,35 +471,27 @@ class ContactsTableWidget(QWidget):
         if logical < 0:
             return
         field = self.HEADERS[logical]
+        values = self._value_cache.get(field)
+        if values is None:
+            self._refresh_value_cache()
+            values = self._value_cache.get(field, [])
 
-        def _show_popup(values):
-            popup = FilterPopup(values, self)
-            if field in self.filters:
-                popup.set_selected(self.filters[field])
-            popup.selection_changed.connect(
-                lambda f=field, p=popup: self._on_filter_changed(f, p)
-            )
-            popup.sort_requested.connect(
-                lambda order, col=logical: self._on_sort_requested(col, order, popup)
-            )
-            section_left = header.sectionViewportPosition(logical)
-            global_pos = header.mapToGlobal(QPoint(section_left, header.height()))
-            popup.move(global_pos)
-            popup.closed.connect(lambda: self._filter_header.set_active_section(None))
-            popup.show()
-
-        def _process_contacts(contacts):
-            values = set()
-            for c in contacts:
-                val = c.get(field, "")
-                if field == "tags":
-                    values.update(t.strip() for t in str(val).split(",") if t.strip())
-                else:
-                    values.add(str(val))
-            _show_popup(values)
+        popup = FilterPopup(values, self)
+        if field in self.filters:
+            popup.set_selected(self.filters[field])
+        popup.selection_changed.connect(
+            lambda f=field, p=popup: self._on_filter_changed(f, p)
+        )
+        popup.sort_requested.connect(
+            lambda order, col=logical: self._on_sort_requested(col, order, popup)
+        )
+        section_left = header.sectionViewportPosition(logical)
+        global_pos = header.mapToGlobal(QPoint(section_left, header.height()))
+        popup.move(global_pos)
+        popup.closed.connect(lambda: self._filter_header.set_active_section(None))
+        popup.show()
 
         self._filter_header.set_active_section(logical)
-        self._fetch_contacts_async(_process_contacts)
 
     def _show_filter_context(self, pos):
         header = self.table.horizontalHeader()
@@ -553,6 +553,7 @@ class ContactsTableWidget(QWidget):
             self.db.add_tag(contact.get("profile_id"), self.quick_tag)
             scroll = self.table.verticalScrollBar().value()
             self._apply_filters()
+            self._refresh_value_cache()
             self.table.verticalScrollBar().setValue(scroll)
             self._status_callback("Tag added")
 
@@ -562,6 +563,7 @@ class ContactsTableWidget(QWidget):
         scroll = self.table.verticalScrollBar().value()
         self.db.remove_tag(contact_id, tag)
         self._apply_filters()
+        self._refresh_value_cache()
         self.table.verticalScrollBar().setValue(scroll)
         self._status_callback("Tag removed")
 
@@ -650,6 +652,19 @@ class ContactsTableWidget(QWidget):
             f"Created {files} file(s) in {export_path}",
         )
         self._status_callback("Export completed")
+
+    def _refresh_value_cache(self):
+        """Fetch all contacts and update the unique value cache."""
+        contacts = self.db.fetch_contacts()
+        cache = {h: set() for h in self.HEADERS}
+        for c in contacts:
+            for h in self.HEADERS:
+                val = c.get(h, "")
+                if h == "tags":
+                    cache[h].update(t.strip() for t in str(val).split(",") if t.strip())
+                else:
+                    cache[h].add(str(val))
+        self._value_cache = {k: sorted(v) for k, v in cache.items()}
 
 
 
