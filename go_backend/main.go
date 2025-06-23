@@ -46,6 +46,10 @@ func main() {
 	}
 	defer db.Close()
 
+	if err := ensureTable(db); err != nil {
+		log.Fatalf("ensure table: %v", err)
+	}
+
 	http.HandleFunc("/contacts", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -148,4 +152,11 @@ func fetchContacts(db *sql.DB, req *QueryRequest) ([]map[string]any, error) {
 		results = append(results, rowMap)
 	}
 	return results, rows.Err()
+}
+
+func ensureTable(db *sql.DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS contacts (
+                profile_id TEXT PRIMARY KEY
+        )`)
+	return err
 }

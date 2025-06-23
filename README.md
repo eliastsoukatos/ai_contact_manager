@@ -55,7 +55,7 @@ This project includes a small Go service that performs all contact searching and
 
 1. **Install dependencies** – make sure Python 3, PyQt5 and Go are installed on your system.
 2. **Build the Go service** – run `go build -o go_backend go_backend/main.go` from the project root. (The `setup_go_backend.py` script does this automatically.)
-3. **Start the backend** – execute `python setup_go_backend.py` to launch the API on port `8081`.
+3. **Start the backend** – execute `python setup_go_backend.py` to launch the API on port `8081`. The service now creates the `contacts` table automatically if it is missing.
 4. **Launch the GUI** – in a new terminal run `python main.py`.
 5. **Verify** – you should see the contact table populate normally. If no data appears, ensure the Go server is still running.
 
