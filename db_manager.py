@@ -303,6 +303,7 @@ class DBManager:
 
             sql = "SELECT * FROM contacts"
             params = []
+            clauses = []
 
             if filters:
                 if self.use_postgres:
@@ -314,15 +315,39 @@ class DBManager:
                     valid_columns = {
                         row[1] for row in cursor.execute("PRAGMA table_info(contacts)")
                     }
-                clauses = []
+
                 for column, value in filters.items():
                     if column not in valid_columns:
                         raise ValueError(f"Invalid column name: {column}")
-                    placeholder = "%s" if self.use_postgres else "?"
-                    clauses.append(f'"{column}" = {placeholder}')
-                    params.append(value)
-                if clauses:
-                    sql += " WHERE " + " AND ".join(clauses)
+                    ph = "%s" if self.use_postgres else "?"
+                    if isinstance(value, (list, tuple, set)):
+                        ph_list = ",".join([ph] * len(value))
+                        clauses.append(f'"{column}" IN ({ph_list})')
+                        params.extend(list(value))
+                    else:
+                        clauses.append(f'"{column}" = {ph}')
+                        params.append(value)
+
+            if search:
+                search_columns = [
+                    "first_name",
+                    "last_name",
+                    "email",
+                    "company_name",
+                    "company_alias",
+                    "job_title",
+                    "mobile",
+                    "tags",
+                ]
+                ph = "%s" if self.use_postgres else "?"
+                search_clauses = []
+                for col in search_columns:
+                    search_clauses.append(f'"{col}" LIKE {ph}')
+                    params.append(f"%{search}%")
+                clauses.append("(" + " OR ".join(search_clauses) + ")")
+
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
 
             if sort_by:
                 sql += f' ORDER BY "{sort_by}" {"DESC" if sort_order == "desc" else "ASC"}'
