@@ -128,6 +128,19 @@ class DBManager:
         cur.execute(create_table_sql)
         conn.commit()
 
+        # Parse the CREATE TABLE statement so we can add any missing columns if
+        # the table already existed with only a subset of the schema (for
+        # example when created by the Go backend). This ensures migrations work
+        # even if the contacts table initially only contained the profile_id
+        # column.
+        base_columns = {}
+        for line in create_table_sql.splitlines():
+            line = line.strip().rstrip(',')
+            if not line or line.startswith('CREATE TABLE') or line == ');':
+                continue
+            name, col_type = line.split(None, 1)
+            base_columns[name.strip('"')] = col_type
+
         # Ensure additional custom columns exist
         additional_columns = {
             "target_company": "TEXT",
@@ -154,6 +167,20 @@ class DBManager:
             existing_columns = {r[0] for r in cur.fetchall()}
         else:
             existing_columns = {row[1] for row in cur.execute("PRAGMA table_info(contacts)")}
+
+        # Add any missing base columns from the CREATE TABLE statement
+        for column, col_type in base_columns.items():
+            if column not in existing_columns:
+                col_def = col_type.replace("PRIMARY KEY", "").strip()
+                if self.use_postgres:
+                    cur.execute(
+                        f'ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "{column}" {col_def}'
+                    )
+                else:
+                    cur.execute(
+                        f"ALTER TABLE contacts ADD COLUMN {column} {col_def}"
+                    )
+                existing_columns.add(column)
 
         for column, col_type in additional_columns.items():
             if column not in existing_columns:
