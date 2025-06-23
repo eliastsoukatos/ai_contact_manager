@@ -13,7 +13,13 @@ except Exception as exc:
     raise SystemExit("psycopg2 not installed. Run 'pip install psycopg2-binary' and retry") from exc
 
 SRC_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "contacts.db")
-PG_DSN = os.getenv("POSTGRES_DSN", "postgresql://contacts_user:contacts_pass@localhost/contacts_db")
+PG_DSN = os.getenv("POSTGRES_DSN")
+
+if not PG_DSN:
+    raise SystemExit(
+        "POSTGRES_DSN environment variable not set. "
+        "Please configure it to point to your PostgreSQL database."
+    )
 
 
 def migrate():
@@ -22,7 +28,10 @@ def migrate():
         raise FileNotFoundError(f"SQLite database not found at {SRC_DB}")
 
     sqlite_conn = sqlite3.connect(SRC_DB)
-    pg_conn = psycopg2.connect(PG_DSN)
+    try:
+        pg_conn = psycopg2.connect(PG_DSN)
+    except psycopg2.OperationalError as exc:
+        raise SystemExit(f"Failed to connect to PostgreSQL: {exc}") from exc
 
     sqlite_cur = sqlite_conn.cursor()
     pg_cur = pg_conn.cursor()

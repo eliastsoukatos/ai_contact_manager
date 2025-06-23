@@ -131,6 +131,23 @@ def ensure_postgres():
                 check=False,
                 env=env,
             )
+            subprocess.run(
+                [
+                    "psql",
+                    "-h",
+                    host,
+                    "-p",
+                    port,
+                    "-U",
+                    admin_user,
+                    "-d",
+                    db_name,
+                    "-c",
+                    f"GRANT ALL ON SCHEMA public TO {app_user}"
+                ],
+                check=False,
+                env=env,
+            )
     except Exception as exc:
         print(f"[WARN] PostgreSQL init failed: {exc}")
     return dsn
