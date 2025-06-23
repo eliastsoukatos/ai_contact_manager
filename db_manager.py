@@ -449,3 +449,33 @@ class DBManager:
         rows = cursor.fetchall()
         column_names = [desc[0] for desc in cursor.description]
         return [dict(zip(column_names, row)) for row in rows]
+
+    def get_distinct_values(self, column):
+        """Return sorted distinct values for the given column."""
+        self.create_contacts_table()
+        conn = self.connect()
+        cur = conn.cursor()
+
+        if self.use_postgres:
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+            )
+            valid_columns = {r[0] for r in cur.fetchall()}
+        else:
+            valid_columns = {
+                row[1] for row in cur.execute("PRAGMA table_info(contacts)")
+            }
+
+        if column not in valid_columns:
+            raise ValueError(f"Invalid column name: {column}")
+
+        cur.execute(f'SELECT DISTINCT "{column}" FROM contacts')
+        values = [row[0] for row in cur.fetchall() if row[0] is not None]
+
+        if column == "tags":
+            result = set()
+            for val in values:
+                result.update(t.strip() for t in str(val).split(',') if t.strip())
+            return sorted(result)
+
+        return sorted(str(v) for v in values)
