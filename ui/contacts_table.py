@@ -391,14 +391,7 @@ class ContactsTableWidget(QWidget):
         if logical < 0:
             return
         field = self.HEADERS[logical]
-        values = set()
-        contacts = self.db.fetch_contacts()
-        for c in contacts:
-            val = c.get(field, "")
-            if field == "tags":
-                values.update(t.strip() for t in str(val).split(",") if t.strip())
-            else:
-                values.add(str(val))
+        values = self.db.get_distinct_values(field)
         popup = FilterPopup(values, self)
         if field in self.filters:
             popup.set_selected(self.filters[field])
