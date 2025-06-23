@@ -1,6 +1,6 @@
 # VibeList
 
-A small demo application for importing Cognism CSV files into a SQLite database and displaying them with a PyQt5 GUI. The project provides:
+A small demo application for importing Cognism CSV files into a SQLite database and displaying them with a PyQt5 GUI. The project now also supports PostgreSQL for storing and querying contacts. The project provides:
 
 * **csv_importer.py** – parses a CSV file and stores the contents in the database.
 * **db_manager.py** – manages the SQLite connection and schema. Contacts are
@@ -47,6 +47,28 @@ short, conversational version of the company name when the alias field is empty.
 
 When exporting contacts to CSV, the first column contains phone numbers and is labeled `phone_number` in the header. Remaining fields use snake_case headers derived from the table columns.
 
+## PostgreSQL Setup
+
+PostgreSQL is now the recommended database backend. Install PostgreSQL from
+[the official downloads page](https://www.postgresql.org/download/) or using
+your system package manager. After installation create a database and user:
+
+```bash
+createdb contacts_db
+createuser -P contacts_user
+psql -d contacts_db -c "GRANT ALL PRIVILEGES ON DATABASE contacts_db TO contacts_user"
+```
+
+Set the connection string in the `POSTGRES_DSN` environment variable, for
+example:
+
+```bash
+export POSTGRES_DSN="postgresql://contacts_user:password@localhost/contacts_db"
+```
+
+Run `python migrate_sqlite_to_postgres.py` to copy existing data from the old
+`contacts.db` file into PostgreSQL.
+
 ## Running the Go Backend
 
 This project includes a small Go service that performs all contact searching and filtering. The Python UI communicates with this service over HTTP.
@@ -54,9 +76,10 @@ This project includes a small Go service that performs all contact searching and
 ### Quick start
 
 1. **Install dependencies** – make sure Python 3, PyQt5 and Go are installed on your system.
-2. **Build the Go service** – run `go build -o go_backend go_backend/main.go` from the project root. (The `setup_go_backend.py` script does this automatically.)
-3. **Start the backend** – execute `python setup_go_backend.py` to launch the API on port `8081`. The service now creates the `contacts` table automatically if it is missing.
-4. **Launch the GUI** – in a new terminal run `python main.py`.
-5. **Verify** – you should see the contact table populate normally. If no data appears, ensure the Go server is still running.
+2. **Install PostgreSQL** – ensure a local PostgreSQL instance is running and `POSTGRES_DSN` is set. The `setup_go_backend.py` script attempts to create a `contacts_db` database and `contacts_user` account if missing.
+3. **Build the Go service** – run `go build -o go_backend go_backend/main.go` from the project root. (The `setup_go_backend.py` script does this automatically.)
+4. **Start the backend** – execute `python setup_go_backend.py` to launch the API on port `8081`. The service now creates the `contacts` table automatically if it is missing.
+5. **Launch the GUI** – in a new terminal run `python main.py`.
+6. **Verify** – you should see the contact table populate normally. If no data appears, ensure the Go server is still running.
 
 If you encounter issues, rebuild the Go binary and confirm nothing else is using port `8081`.

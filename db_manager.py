@@ -1,17 +1,40 @@
 import os
+
 import sqlite3
 
-class DBManager:
-    """Simple manager for SQLite database connections."""
+try:
+    import psycopg2  # type: ignore
+except Exception:  # pragma: no cover - psycopg2 may not be installed
+    psycopg2 = None
 
-    def __init__(self, db_name="contacts.db"):
-        # Store absolute path to the database within the project directory
-        self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), db_name)
+class DBManager:
+    """Manage database connections using SQLite or PostgreSQL."""
+
+    def __init__(self, db_name: str = "contacts.db"):
+        self.pg_dsn = os.getenv("POSTGRES_DSN")
+        self.use_postgres = bool(self.pg_dsn)
+
+        if self.use_postgres:
+            if psycopg2 is None:
+                raise RuntimeError(
+                    "psycopg2 is required for PostgreSQL support. Please install it."
+                )
+            self.db_path = None
+        else:
+            self.db_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), db_name
+            )
+
         self.conn = None
 
     def connect(self):
-        """Create a connection to the SQLite database if not already connected."""
-        if self.conn is None:
+        """Create a connection to the configured database."""
+        if self.conn is not None:
+            return self.conn
+
+        if self.use_postgres:
+            self.conn = psycopg2.connect(self.pg_dsn)
+        else:
             self.conn = sqlite3.connect(self.db_path)
         return self.conn
 
@@ -23,6 +46,7 @@ class DBManager:
 
     def create_contacts_table(self):
         conn = self.connect()
+        cur = conn.cursor()
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS contacts (
             profile_id TEXT PRIMARY KEY,
@@ -101,7 +125,7 @@ class DBManager:
             job_change_date TEXT
         );
         """
-        conn.execute(create_table_sql)
+        cur.execute(create_table_sql)
         conn.commit()
 
         # Ensure additional custom columns exist
@@ -123,14 +147,25 @@ class DBManager:
             "status": "TEXT",
         }
 
-        existing_columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(contacts)")
-        }
+        if self.use_postgres:
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+            )
+            existing_columns = {r[0] for r in cur.fetchall()}
+        else:
+            existing_columns = {row[1] for row in cur.execute("PRAGMA table_info(contacts)")}
+
         for column, col_type in additional_columns.items():
             if column not in existing_columns:
-                conn.execute(
-                    f"ALTER TABLE contacts ADD COLUMN {column} {col_type}"
-                )
+                if self.use_postgres:
+                    cur.execute(
+                        f'ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "{column}" {col_type}'
+                    )
+                else:
+                    cur.execute(
+                        f"ALTER TABLE contacts ADD COLUMN {column} {col_type}"
+                    )
+
         conn.commit()
 
     def insert_contact(self, data):
@@ -149,10 +184,18 @@ class DBManager:
         columns = list(data.keys())
         values = list(data.values())
 
-        placeholders = ", ".join(["?" for _ in columns])
-        cols_joined = ", ".join([f'"{c}"' for c in columns])
-        sql = f"INSERT OR IGNORE INTO contacts ({cols_joined}) VALUES ({placeholders})"
-        conn.execute(sql, values)
+        if self.use_postgres:
+            placeholders = ", ".join(["%s" for _ in columns])
+            cols_joined = ", ".join([f'"{c}"' for c in columns])
+            sql = (
+                f"INSERT INTO contacts ({cols_joined}) VALUES ({placeholders}) "
+                "ON CONFLICT (profile_id) DO NOTHING"
+            )
+        else:
+            placeholders = ", ".join(["?" for _ in columns])
+            cols_joined = ", ".join([f'"{c}"' for c in columns])
+            sql = f"INSERT OR IGNORE INTO contacts ({cols_joined}) VALUES ({placeholders})"
+        conn.cursor().execute(sql, values)
         conn.commit()
 
     def update_contact(self, contact_id, data):
@@ -162,29 +205,39 @@ class DBManager:
         self.create_contacts_table()
         conn = self.connect()
 
-        valid_columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(contacts)")
-        }
+        cur = conn.cursor()
+        if self.use_postgres:
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+            )
+            valid_columns = {r[0] for r in cur.fetchall()}
+        else:
+            valid_columns = {row[1] for row in cur.execute("PRAGMA table_info(contacts)")}
         updates = []
         params = []
         for column, value in data.items():
             if column not in valid_columns:
                 raise ValueError(f"Invalid column name: {column}")
-            updates.append(f'"{column}" = ?')
+            updates.append(f'"{column}" = {"%s" if self.use_postgres else "?"}')
             params.append(value)
         if not updates:
             return
 
         params.append(contact_id)
-        sql = f"UPDATE contacts SET {', '.join(updates)} WHERE profile_id = ?"
-        conn.execute(sql, params)
+        placeholder = "%s" if self.use_postgres else "?"
+        sql = f"UPDATE contacts SET {', '.join(updates)} WHERE profile_id = {placeholder}"
+        cur.execute(sql, params)
         conn.commit()
 
     def delete_contact(self, contact_id):
         """Delete a contact from the database by profile_id."""
         self.create_contacts_table()
         conn = self.connect()
-        conn.execute("DELETE FROM contacts WHERE profile_id = ?", (contact_id,))
+        cur = conn.cursor()
+        placeholder = "%s" if self.use_postgres else "?"
+        cur.execute(
+            f"DELETE FROM contacts WHERE profile_id = {placeholder}", (contact_id,)
+        )
         conn.commit()
 
     def fetch_contacts(
@@ -214,7 +267,7 @@ class DBManager:
             data = resp.json()
             return data.get("contacts", [])
         except Exception:
-            # Fallback to direct SQLite query if the service is unavailable
+            # Fallback to direct DB query if the service is unavailable
             self.create_contacts_table()
             conn = self.connect()
             cursor = conn.cursor()
@@ -223,12 +276,21 @@ class DBManager:
             params = []
 
             if filters:
-                valid_columns = {row[1] for row in conn.execute("PRAGMA table_info(contacts)")}
+                if self.use_postgres:
+                    cursor.execute(
+                        "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+                    )
+                    valid_columns = {r[0] for r in cursor.fetchall()}
+                else:
+                    valid_columns = {
+                        row[1] for row in cursor.execute("PRAGMA table_info(contacts)")
+                    }
                 clauses = []
                 for column, value in filters.items():
                     if column not in valid_columns:
                         raise ValueError(f"Invalid column name: {column}")
-                    clauses.append(f'"{column}" = ?')
+                    placeholder = "%s" if self.use_postgres else "?"
+                    clauses.append(f'"{column}" = {placeholder}')
                     params.append(value)
                 if clauses:
                     sql += " WHERE " + " AND ".join(clauses)
@@ -237,13 +299,16 @@ class DBManager:
                 sql += f' ORDER BY "{sort_by}" {"DESC" if sort_order == "desc" else "ASC"}'
 
             if limit is not None:
-                sql += " LIMIT ?"
+                sql += " LIMIT %s" if self.use_postgres else " LIMIT ?"
                 params.append(limit)
                 if offset is not None:
-                    sql += " OFFSET ?"
+                    sql += " OFFSET %s" if self.use_postgres else " OFFSET ?"
                     params.append(offset)
             elif offset is not None:
-                sql += " LIMIT -1 OFFSET ?"
+                if self.use_postgres:
+                    sql += " OFFSET %s"
+                else:
+                    sql += " LIMIT -1 OFFSET ?"
                 params.append(offset)
 
             cursor.execute(sql, params)
@@ -256,10 +321,13 @@ class DBManager:
         self.create_contacts_table()
         conn = self.connect()
 
-        row = conn.execute(
-            "SELECT tags FROM contacts WHERE profile_id = ?",
+        cur = conn.cursor()
+        placeholder = "%s" if self.use_postgres else "?"
+        cur.execute(
+            f"SELECT tags FROM contacts WHERE profile_id = {placeholder}",
             (contact_id,),
-        ).fetchone()
+        )
+        row = cur.fetchone()
         if row is None:
             return
 
@@ -271,8 +339,8 @@ class DBManager:
 
         existing.append(tag)
         new_tags = ','.join(existing)
-        conn.execute(
-            "UPDATE contacts SET tags = ? WHERE profile_id = ?",
+        cur.execute(
+            f"UPDATE contacts SET tags = {placeholder} WHERE profile_id = {placeholder}",
             (new_tags, contact_id),
         )
         conn.commit()
@@ -282,10 +350,13 @@ class DBManager:
         self.create_contacts_table()
         conn = self.connect()
 
-        row = conn.execute(
-            "SELECT tags FROM contacts WHERE profile_id = ?",
+        cur = conn.cursor()
+        placeholder = "%s" if self.use_postgres else "?"
+        cur.execute(
+            f"SELECT tags FROM contacts WHERE profile_id = {placeholder}",
             (contact_id,),
-        ).fetchone()
+        )
+        row = cur.fetchone()
         if row is None or not row[0]:
             return
 
@@ -295,8 +366,8 @@ class DBManager:
 
         tags = [t for t in tags if t != tag]
         new_tags = ','.join(tags)
-        conn.execute(
-            "UPDATE contacts SET tags = ? WHERE profile_id = ?",
+        cur.execute(
+            f"UPDATE contacts SET tags = {placeholder} WHERE profile_id = {placeholder}",
             (new_tags, contact_id),
         )
         conn.commit()
@@ -307,9 +378,10 @@ class DBManager:
         conn = self.connect()
         cursor = conn.cursor()
 
+        placeholder = "%s" if self.use_postgres else "?"
         sql = (
-            "SELECT * FROM contacts WHERE tags = ?"
-            " OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?"
+            f"SELECT * FROM contacts WHERE tags = {placeholder}"
+            f" OR tags LIKE {placeholder} OR tags LIKE {placeholder} OR tags LIKE {placeholder}"
         )
         params = (
             tag,
