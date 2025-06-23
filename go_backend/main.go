@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -30,17 +31,28 @@ type Response struct {
 	Contacts []map[string]any `json:"contacts"`
 }
 
-func main() {
-	dbPath := os.Getenv("CONTACTS_DB")
-	if dbPath == "" {
-		dir, err := os.Getwd()
-		if err != nil {
-			log.Fatalf("getwd: %v", err)
-		}
-		dbPath = fmt.Sprintf("%s/contacts.db", dir)
-	}
+var usePostgres bool
 
-	db, err := sql.Open("sqlite3", dbPath)
+func main() {
+	pgDSN := os.Getenv("POSTGRES_DSN")
+	var (
+		db  *sql.DB
+		err error
+	)
+	if pgDSN != "" {
+		usePostgres = true
+		db, err = sql.Open("postgres", pgDSN)
+	} else {
+		dbPath := os.Getenv("CONTACTS_DB")
+		if dbPath == "" {
+			dir, err2 := os.Getwd()
+			if err2 != nil {
+				log.Fatalf("getwd: %v", err2)
+			}
+			dbPath = fmt.Sprintf("%s/contacts.db", dir)
+		}
+		db, err = sql.Open("sqlite3", dbPath)
+	}
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
@@ -76,6 +88,14 @@ func fetchContacts(db *sql.DB, req *QueryRequest) ([]map[string]any, error) {
 	query := "SELECT * FROM contacts"
 	var params []any
 	clauses := []string{}
+	phCount := 0
+	nextPH := func() string {
+		phCount++
+		if usePostgres {
+			return fmt.Sprintf("$%d", phCount)
+		}
+		return "?"
+	}
 
 	for col, values := range req.Filters {
 		if len(values) == 0 {
@@ -83,7 +103,7 @@ func fetchContacts(db *sql.DB, req *QueryRequest) ([]map[string]any, error) {
 		}
 		ph := make([]string, len(values))
 		for i, v := range values {
-			ph[i] = "?"
+			ph[i] = nextPH()
 			params = append(params, v)
 		}
 		clauses = append(clauses, fmt.Sprintf("\"%s\" IN (%s)", col, strings.Join(ph, ",")))
@@ -92,7 +112,7 @@ func fetchContacts(db *sql.DB, req *QueryRequest) ([]map[string]any, error) {
 		searchCols := []string{"first_name", "last_name", "email", "company_name", "company_alias", "job_title", "mobile", "tags"}
 		searchParts := make([]string, len(searchCols))
 		for i, c := range searchCols {
-			searchParts[i] = fmt.Sprintf("\"%s\" LIKE ?", c)
+			searchParts[i] = fmt.Sprintf("\"%s\" LIKE %s", c, nextPH())
 			params = append(params, "%"+req.Search+"%")
 		}
 		clauses = append(clauses, "("+strings.Join(searchParts, " OR ")+" )")
@@ -108,14 +128,18 @@ func fetchContacts(db *sql.DB, req *QueryRequest) ([]map[string]any, error) {
 		query += fmt.Sprintf(" ORDER BY \"%s\" %s", req.SortBy, order)
 	}
 	if req.Limit > 0 {
-		query += " LIMIT ?"
+		query += " LIMIT " + nextPH()
 		params = append(params, req.Limit)
 		if req.Offset > 0 {
-			query += " OFFSET ?"
+			query += " OFFSET " + nextPH()
 			params = append(params, req.Offset)
 		}
 	} else if req.Offset > 0 {
-		query += " LIMIT -1 OFFSET ?"
+		if usePostgres {
+			query += " OFFSET " + nextPH()
+		} else {
+			query += " LIMIT -1 OFFSET " + nextPH()
+		}
 		params = append(params, req.Offset)
 	}
 
