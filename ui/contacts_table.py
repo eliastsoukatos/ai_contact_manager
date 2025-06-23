@@ -494,7 +494,9 @@ class ContactsTableWidget(QWidget):
         self.column_widths = settings.get("widths", {})
         raw_filters = get_settings().get("table_filters", {})
         self.filters = {
-            k: set(v) if not isinstance(v, set) else v for k, v in raw_filters.items()
+            k: set(v) if not isinstance(v, set) else v
+            for k, v in raw_filters.items()
+            if v
         }
         sort = get_settings().get("table_sort", {})
         column = sort.get("column")
@@ -532,7 +534,7 @@ class ContactsTableWidget(QWidget):
             "visibility": self.column_visibility,
             "widths": widths,
         }
-        settings["table_filters"] = self.filters
+        settings["table_filters"] = {k: v for k, v in self.filters.items() if v}
         sort = {}
         if self.sort_column is not None:
             sort = {
