@@ -178,7 +178,7 @@ class ContactsTableWidget(QWidget):
                     current_disp = contact.get("contact_disposition", "")
                     combo.setCurrentText(current_disp)
                     self._set_disposition_style(combo, current_disp)
-                    combo.currentTextChanged.connect(
+                    combo.currentIndexChanged[str].connect(
                         lambda value, cid=contact.get("profile_id"), c=combo: (
                             self._on_disposition_changed(cid, value),
                             self._set_disposition_style(c, value),
@@ -198,7 +198,7 @@ class ContactsTableWidget(QWidget):
                     current_status = contact.get("status", "")
                     combo.setCurrentText(current_status)
                     self._set_status_style(combo, current_status)
-                    combo.currentTextChanged.connect(
+                    combo.currentIndexChanged[str].connect(
                         lambda value, cid=contact.get("profile_id"), c=combo: (
                             self._on_status_changed(cid, value),
                             self._set_status_style(c, value),

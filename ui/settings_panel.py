@@ -52,7 +52,7 @@ class SettingsDialog(QDialog):
             "o3-mini",
         ])
         self.model_combo.setCurrentText(self._settings.get("llm_model", "gpt-4.1"))
-        self.model_combo.currentTextChanged.connect(
+        self.model_combo.currentIndexChanged[str].connect(
             lambda text: update_setting("llm_model", text)
         )
         form.addRow("LLM Model", self.model_combo)
