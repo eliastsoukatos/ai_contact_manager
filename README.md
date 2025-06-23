@@ -46,3 +46,17 @@ short, conversational version of the company name when the alias field is empty.
 ## CSV Export
 
 When exporting contacts to CSV, the first column contains phone numbers and is labeled `phone_number` in the header. Remaining fields use snake_case headers derived from the table columns.
+
+## Running the Go Backend
+
+This project includes a small Go service that performs all contact searching and filtering. The Python UI communicates with this service over HTTP.
+
+### Quick start
+
+1. **Install dependencies** – make sure Python 3, PyQt5 and Go are installed on your system.
+2. **Build the Go service** – run `go build -o go_backend go_backend/main.go` from the project root. (The `setup_go_backend.py` script does this automatically.)
+3. **Start the backend** – execute `python setup_go_backend.py` to launch the API on port `8081`.
+4. **Launch the GUI** – in a new terminal run `python main.py`.
+5. **Verify** – you should see the contact table populate normally. If no data appears, ensure the Go server is still running.
+
+If you encounter issues, rebuild the Go binary and confirm nothing else is using port `8081`.
