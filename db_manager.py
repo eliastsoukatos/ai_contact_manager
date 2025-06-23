@@ -29,6 +29,8 @@ class DBManager:
             )
 
         self.conn = None
+        self._table_initialized = False
+        self._columns_cache = None
 
     def connect(self):
         """Create a connection to the configured database."""
@@ -48,6 +50,8 @@ class DBManager:
             self.conn = None
 
     def create_contacts_table(self):
+        if self._table_initialized:
+            return
         conn = self.connect()
         cur = conn.cursor()
         create_table_sql = """
@@ -130,6 +134,19 @@ class DBManager:
         """
         cur.execute(create_table_sql)
         conn.commit()
+
+        # Cache column names for later validation
+        if self.use_postgres:
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+            )
+            self._columns_cache = {r[0] for r in cur.fetchall()}
+        else:
+            self._columns_cache = {
+                row[1] for row in cur.execute("PRAGMA table_info(contacts)")
+            }
+
+        self._table_initialized = True
 
         # Parse the CREATE TABLE statement so we can add any missing columns if
         # the table already existed with only a subset of the schema (for
@@ -236,13 +253,17 @@ class DBManager:
         conn = self.connect()
 
         cur = conn.cursor()
-        if self.use_postgres:
-            cur.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
-            )
-            valid_columns = {r[0] for r in cur.fetchall()}
-        else:
-            valid_columns = {row[1] for row in cur.execute("PRAGMA table_info(contacts)")}
+        if self._columns_cache is None:
+            if self.use_postgres:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+                )
+                self._columns_cache = {r[0] for r in cur.fetchall()}
+            else:
+                self._columns_cache = {
+                    row[1] for row in cur.execute("PRAGMA table_info(contacts)")
+                }
+        valid_columns = self._columns_cache
         updates = []
         params = []
         for column, value in data.items():
@@ -306,15 +327,17 @@ class DBManager:
             clauses = []
 
             if filters:
-                if self.use_postgres:
-                    cursor.execute(
-                        "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
-                    )
-                    valid_columns = {r[0] for r in cursor.fetchall()}
-                else:
-                    valid_columns = {
-                        row[1] for row in cursor.execute("PRAGMA table_info(contacts)")
-                    }
+                if self._columns_cache is None:
+                    if self.use_postgres:
+                        cursor.execute(
+                            "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+                        )
+                        self._columns_cache = {r[0] for r in cursor.fetchall()}
+                    else:
+                        self._columns_cache = {
+                            row[1] for row in cursor.execute("PRAGMA table_info(contacts)")
+                        }
+                valid_columns = self._columns_cache
 
                 for column, value in filters.items():
                     if column not in valid_columns:
@@ -456,15 +479,17 @@ class DBManager:
         conn = self.connect()
         cur = conn.cursor()
 
-        if self.use_postgres:
-            cur.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
-            )
-            valid_columns = {r[0] for r in cur.fetchall()}
-        else:
-            valid_columns = {
-                row[1] for row in cur.execute("PRAGMA table_info(contacts)")
-            }
+        if self._columns_cache is None:
+            if self.use_postgres:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+                )
+                self._columns_cache = {r[0] for r in cur.fetchall()}
+            else:
+                self._columns_cache = {
+                    row[1] for row in cur.execute("PRAGMA table_info(contacts)")
+                }
+        valid_columns = self._columns_cache
 
         if column not in valid_columns:
             raise ValueError(f"Invalid column name: {column}")
