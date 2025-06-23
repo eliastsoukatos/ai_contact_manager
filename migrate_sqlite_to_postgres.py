@@ -7,6 +7,8 @@ already exists in PostgreSQL. The script will not delete any SQLite data.
 import os
 import sqlite3
 
+from db_manager import DBManager
+
 try:
     import psycopg2  # type: ignore
 except Exception as exc:
@@ -26,6 +28,10 @@ def migrate():
     """Copy all data from SQLite to PostgreSQL."""
     if not os.path.exists(SRC_DB):
         raise FileNotFoundError(f"SQLite database not found at {SRC_DB}")
+
+    # Ensure the destination table exists with the full schema
+    db = DBManager()
+    db.create_contacts_table()
 
     sqlite_conn = sqlite3.connect(SRC_DB)
     try:
@@ -53,6 +59,7 @@ def migrate():
     pg_conn.commit()
     sqlite_conn.close()
     pg_conn.close()
+    db.close()
 
 
 if __name__ == "__main__":
