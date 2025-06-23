@@ -5,7 +5,7 @@ import platform
 import signal
 import shutil
 
-DEFAULT_DSN = "postgresql://postgres:CBSIX1KWPhWuZB@localhost/contacts_db?sslmode=disable"
+DEFAULT_DSN = "postgresql://contacts_user:CBSIX1KWPhWuZB@localhost/contacts_db?sslmode=disable"
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -61,10 +61,76 @@ def ensure_postgres():
         print("[ERROR] PostgreSQL not found. Please install it from https://www.postgresql.org/download/")
         return dsn
 
+    from urllib.parse import urlparse
+
+    parsed = urlparse(dsn)
+    db_name = parsed.path.lstrip("/") or "contacts_db"
+    app_user = parsed.username or "contacts_user"
+    app_pass = parsed.password or ""
+    host = parsed.hostname or "localhost"
+    port = str(parsed.port or 5432)
+
+    admin_user = "postgres"
+    admin_pass = os.environ.get("POSTGRES_PASSWORD", app_pass)
+
+    env = os.environ.copy()
+    if admin_pass:
+        env["PGPASSWORD"] = admin_pass
+
     try:
-        subprocess.run(["psql", "-U", "postgres", "-c", "CREATE DATABASE contacts_db"], check=False)
-        subprocess.run(["psql", "-U", "postgres", "-c", "CREATE USER contacts_user WITH PASSWORD 'CBSIX1KWPhWuZB'"], check=False)
-        subprocess.run(["psql", "-U", "postgres", "-c", "GRANT ALL PRIVILEGES ON DATABASE contacts_db TO contacts_user"], check=False)
+        subprocess.run(
+            [
+                "psql",
+                "-h",
+                host,
+                "-p",
+                port,
+                "-U",
+                admin_user,
+                "-d",
+                "postgres",
+                "-c",
+                f"CREATE DATABASE {db_name}"
+            ],
+            check=False,
+            env=env,
+        )
+
+        if app_user != admin_user:
+            subprocess.run(
+                [
+                    "psql",
+                    "-h",
+                    host,
+                    "-p",
+                    port,
+                    "-U",
+                    admin_user,
+                    "-d",
+                    "postgres",
+                    "-c",
+                    f"CREATE USER {app_user} WITH PASSWORD '{app_pass}'"
+                ],
+                check=False,
+                env=env,
+            )
+            subprocess.run(
+                [
+                    "psql",
+                    "-h",
+                    host,
+                    "-p",
+                    port,
+                    "-U",
+                    admin_user,
+                    "-d",
+                    "postgres",
+                    "-c",
+                    f"GRANT ALL PRIVILEGES ON DATABASE {db_name} TO {app_user}"
+                ],
+                check=False,
+                env=env,
+            )
     except Exception as exc:
         print(f"[WARN] PostgreSQL init failed: {exc}")
     return dsn
