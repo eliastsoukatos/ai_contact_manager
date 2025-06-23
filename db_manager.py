@@ -1,6 +1,9 @@
 import os
 
 import sqlite3
+import requests
+
+session = requests.Session()
 
 try:
     import psycopg2  # type: ignore
@@ -277,7 +280,6 @@ class DBManager:
         offset=None,
     ):
         """Fetch contacts via the Go API backend."""
-        import requests
 
         payload = {
             "filters": filters or {},
@@ -289,7 +291,7 @@ class DBManager:
         }
 
         try:
-            resp = requests.post("http://localhost:8081/contacts", json=payload, timeout=5)
+            resp = session.post("http://localhost:8081/contacts", json=payload, timeout=5)
             resp.raise_for_status()
             data = resp.json()
             return data.get("contacts", [])
