@@ -321,6 +321,8 @@ class DBManager:
                         raise ValueError(f"Invalid column name: {column}")
                     ph = "%s" if self.use_postgres else "?"
                     if isinstance(value, (list, tuple, set)):
+                        if len(value) == 0:
+                            continue
                         ph_list = ",".join([ph] * len(value))
                         clauses.append(f'"{column}" IN ({ph_list})')
                         params.extend(list(value))
