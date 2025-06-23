@@ -195,14 +195,15 @@ class ContactsTableWidget(QWidget):
         if self.sort_column is not None:
             sort_by = self.HEADERS[self.sort_column]
         sort_order = "desc" if self.sort_order == Qt.DescendingOrder else "asc"
-        # Drop filters for columns that are currently hidden. When a column is
-        # hidden, its header isn't visible so any active filter is easy to miss
-        # and can make it seem like data disappeared. Removing hidden column
-        # filters ensures the table always reflects what the user sees.
-        for col in list(self.filters):
-            if not self.column_visibility.get(col, True):
-                self.filters.pop(col, None)
-        filters = {k: list(v) for k, v in self.filters.items()}
+        # Ignore filters belonging to hidden columns so they don't affect the
+        # visible results. This avoids confusion if a hidden column still has an
+        # active filter without permanently discarding the user's selection.
+        visible_filters = {
+            k: v
+            for k, v in self.filters.items()
+            if self.column_visibility.get(k, True)
+        }
+        filters = {k: list(v) for k, v in visible_filters.items()}
         if self._fetch_thread:
             self._fetch_thread.quit()
             self._fetch_thread.wait()
