@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QGroupBox,
 )
+from ai.prompts import FIELD_TO_PROMPT
+from ui.prompt_edit_dialog import PromptEditDialog
 from PyQt5.QtCore import Qt, pyqtSignal
 
 
@@ -64,6 +66,9 @@ class FilterPopup(QWidget):
             self.power_btn = QPushButton("Run Prompt")
             self.power_btn.clicked.connect(lambda: self._ai_callback(self._field))
             power_layout.addWidget(self.power_btn)
+            self.edit_btn = QPushButton("Edit Prompt")
+            self.edit_btn.clicked.connect(self._edit_prompt)
+            power_layout.addWidget(self.edit_btn)
             layout.addWidget(power_box)
 
     def _populate(self):
@@ -99,6 +104,13 @@ class FilterPopup(QWidget):
         for i in range(self.list_widget.count()):
             self.list_widget.item(i).setCheckState(Qt.Unchecked)
         self.selection_changed.emit()
+
+    def _edit_prompt(self):
+        key = FIELD_TO_PROMPT.get(self._field)
+        if not key:
+            return
+        dialog = PromptEditDialog(key, self)
+        dialog.exec()
 
     def closeEvent(self, event):
         self.closed.emit()
