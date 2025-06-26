@@ -400,13 +400,13 @@ class DBManager:
             if sort_by:
                 sql += f' ORDER BY "{sort_by}" {"DESC" if sort_order == "desc" else "ASC"}'
 
-            if limit is not None:
+            if limit is not None and limit > 0:
                 sql += " LIMIT %s" if self.use_postgres else " LIMIT ?"
                 params.append(limit)
-                if offset is not None:
+                if offset is not None and offset > 0:
                     sql += " OFFSET %s" if self.use_postgres else " OFFSET ?"
                     params.append(offset)
-            elif offset is not None:
+            elif offset is not None and offset > 0:
                 if self.use_postgres:
                     sql += " OFFSET %s"
                 else:
