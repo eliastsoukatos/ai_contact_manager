@@ -537,9 +537,19 @@ class ContactsTableWidget(QWidget):
 
     def _load_layout(self):
         settings = get_settings().get("table_layout", {})
-        self.column_visibility.update(settings.get("visibility", {}))
-        self.column_order = settings.get("order", self.HEADERS[:])
-        self.column_widths = settings.get("widths", {})
+        visibility = settings.get("visibility", {})
+        self.column_visibility.update(
+            {k: v for k, v in visibility.items() if k in self.HEADERS}
+        )
+        order = [c for c in settings.get("order", self.HEADERS[:]) if c in self.HEADERS]
+        if set(order) == set(self.HEADERS):
+            self.column_order = order
+        else:
+            self.column_order = self.HEADERS[:]
+        widths = settings.get("widths", {})
+        self.column_widths = {
+            k: w for k, w in widths.items() if k in self.HEADERS and isinstance(w, int) and w > 0
+        }
         raw_filters = get_settings().get("table_filters", {})
         self.filters = {
             k: set(v) if not isinstance(v, set) else v
@@ -564,8 +574,9 @@ class ContactsTableWidget(QWidget):
                 header.moveSection(header.visualIndex(logical), target)
         for idx, name in enumerate(self.HEADERS):
             self.table.setColumnHidden(idx, not self.column_visibility.get(name, True))
-            if name in getattr(self, "column_widths", {}):
-                header.resizeSection(idx, self.column_widths[name])
+            width = getattr(self, "column_widths", {}).get(name)
+            if isinstance(width, int) and width > 0:
+                header.resizeSection(idx, width)
             else:
                 header.resizeSection(idx, header.sectionSizeHint(idx))
         self._update_header_styles()
