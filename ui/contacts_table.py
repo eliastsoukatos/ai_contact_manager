@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QGridLayout,
+    QLineEdit,
     QLabel,
     QPushButton,
     QSpinBox,
@@ -79,7 +80,7 @@ class ContactsTableWidget(QWidget):
         "status",
     ]
 
-    AI_POWERUP_COLUMNS = [
+    BASE_AI_COLUMNS = [
         "target_company",
         "contact_icp_status",
         "clients_of_contact",
@@ -99,6 +100,16 @@ class ContactsTableWidget(QWidget):
             if col not in self.HEADERS:
                 self.HEADERS.append(col)
         self.column_visibility = {h: (h in self.BASE_HEADERS) for h in self.HEADERS}
+
+        settings = get_settings()
+        prompts = settings.get("prompts", {})
+        for key in prompts.keys():
+            FIELD_TO_PROMPT.setdefault(key, key)
+
+        self.ai_powerup_columns = self.BASE_AI_COLUMNS[:]
+        for key in prompts.keys():
+            if key not in self.ai_powerup_columns:
+                self.ai_powerup_columns.append(key)
         self.contacts = []
         self.filtered_contacts = []
         self.search_text = ""
@@ -167,7 +178,7 @@ class ContactsTableWidget(QWidget):
         self.table.setHorizontalHeaderLabels(self.HEADERS)
         self._ai_star_icon = self._create_star_icon()
         for idx, name in enumerate(self.HEADERS):
-            if name in self.AI_POWERUP_COLUMNS:
+            if name in self.ai_powerup_columns:
                 item = self.table.horizontalHeaderItem(idx)
                 if item is None:
                     item = QTableWidgetItem(name)
@@ -486,6 +497,84 @@ class ContactsTableWidget(QWidget):
             self._status_callback("Column visibility updated")
             self.save_layout()
 
+    def add_custom_column(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Column")
+        vbox = QVBoxLayout(dialog)
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("column_name")
+        ai_cb = QCheckBox("AI Power Up")
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        vbox.addWidget(name_edit)
+        vbox.addWidget(ai_cb)
+        vbox.addWidget(buttons)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        name = name_edit.text().strip().lower().replace(" ", "_")
+        if not name:
+            return
+        self.db.add_column(name)
+        if name not in self.HEADERS:
+            self.HEADERS.append(name)
+        self.column_visibility[name] = True
+        if ai_cb.isChecked():
+            update_setting(f"prompts.{name}", "")
+            FIELD_TO_PROMPT.setdefault(name, name)
+            if name not in self.ai_powerup_columns:
+                self.ai_powerup_columns.append(name)
+        self.table.setColumnCount(len(self.HEADERS))
+        self.table.setHorizontalHeaderLabels(self.HEADERS)
+        idx = self.HEADERS.index(name)
+        if name in self.ai_powerup_columns:
+            item = self.table.horizontalHeaderItem(idx)
+            if item is None:
+                item = QTableWidgetItem(name)
+                self.table.setHorizontalHeaderItem(idx, item)
+            item.setIcon(self._ai_star_icon)
+        self._apply_layout()
+        self.load_contacts()
+        self._status_callback("Column added")
+
+    def delete_custom_column(self):
+        custom = [c for c in self.HEADERS if c not in self.BASE_HEADERS]
+        if not custom:
+            QMessageBox.information(self, "Delete Column", "No custom columns")
+            return
+        col, ok = QInputDialog.getItem(self, "Delete Column", "Column:", custom, 0, False)
+        if not ok or not col:
+            return
+        confirm = QMessageBox.question(
+            self,
+            "Delete Column",
+            f"Delete column '{col}'?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        self.db.remove_column(col)
+        if col in self.ai_powerup_columns:
+            self.ai_powerup_columns.remove(col)
+        FIELD_TO_PROMPT.pop(col, None)
+        settings = get_settings()
+        prompts = settings.get("prompts", {})
+        if col in prompts:
+            prompts.pop(col)
+            save_settings()
+        if col in self.HEADERS:
+            idx = self.HEADERS.index(col)
+            self.HEADERS.remove(col)
+            self.table.removeColumn(idx)
+            self.column_visibility.pop(col, None)
+            if hasattr(self, "column_order") and col in self.column_order:
+                self.column_order.remove(col)
+            if hasattr(self, "column_widths") and col in self.column_widths:
+                self.column_widths.pop(col)
+        self._apply_layout()
+        self.load_contacts()
+        self._status_callback("Column deleted")
+
     def _open_filter_popup(self, logical):
         header = self.table.horizontalHeader()
         if logical < 0:
@@ -591,12 +680,16 @@ class ContactsTableWidget(QWidget):
         selected = [i.column() for i in sel.selectedColumns()]
         if len(selected) == 1 and selected[0] == index:
             self.table.clearSelection()
+        else:
+            self.table.selectColumn(index)
 
     def _on_row_section_clicked(self, index):
         sel = self.table.selectionModel()
         selected = [i.row() for i in sel.selectedRows()]
         if len(selected) == 1 and selected[0] == index:
             self.table.clearSelection()
+        else:
+            self.table.selectRow(index)
 
     def _change_page(self, delta: int):
         new_page = self.page + delta
