@@ -18,8 +18,15 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QProgressDialog,
 )
-from PyQt5.QtGui import QBrush
-from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtGui import (
+    QBrush,
+    QIcon,
+    QPixmap,
+    QPainter,
+    QColor,
+    QPolygonF,
+)
+from PyQt5.QtCore import Qt, QPoint, QPointF
 
 import os
 
@@ -71,6 +78,17 @@ class ContactsTableWidget(QWidget):
         "status",
     ]
 
+    AI_POWERUP_COLUMNS = [
+        "target_company",
+        "contact_icp_status",
+        "clients_of_contact",
+        "area_of_business",
+        "most_relevant_summit",
+        "client_icp",
+        "company_alias",
+        "time_zone_utc",
+    ]
+
     def __init__(self, db: DBManager, status_callback=None, parent=None):
         super().__init__(parent)
         self.db = db
@@ -109,6 +127,29 @@ class ContactsTableWidget(QWidget):
         else:
             combo.setStyleSheet("")
 
+    def _create_star_icon(self, size: int = 12) -> QIcon:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor("green"))
+        painter.setPen(Qt.NoPen)
+        points = [
+            QPointF(size * 0.5, 0),
+            QPointF(size * 0.61, size * 0.35),
+            QPointF(size, size * 0.38),
+            QPointF(size * 0.68, size * 0.62),
+            QPointF(size * 0.79, size),
+            QPointF(size * 0.5, size * 0.77),
+            QPointF(size * 0.21, size),
+            QPointF(size * 0.32, size * 0.62),
+            QPointF(0, size * 0.38),
+            QPointF(size * 0.39, size * 0.35),
+        ]
+        painter.drawPolygon(QPolygonF(points))
+        painter.end()
+        return QIcon(pixmap)
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
@@ -119,6 +160,14 @@ class ContactsTableWidget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
+        self._ai_star_icon = self._create_star_icon()
+        for idx, name in enumerate(self.HEADERS):
+            if name in self.AI_POWERUP_COLUMNS:
+                item = self.table.horizontalHeaderItem(idx)
+                if item is None:
+                    item = QTableWidgetItem(name)
+                    self.table.setHorizontalHeaderItem(idx, item)
+                item.setIcon(self._ai_star_icon)
         header = FilterHeader()
         self.table.setHorizontalHeader(header)
         header.setSectionsMovable(True)
