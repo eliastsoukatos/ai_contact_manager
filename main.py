@@ -20,7 +20,7 @@ from db_manager import DBManager
 from csv_importer import CSVImporter
 from ui.contacts_table import ContactsTableWidget
 from ui.settings_panel import SettingsDialog
-from ai.enrichment import enrich_database, estimate_steps
+
 
 
 class MainWindow(QMainWindow):
@@ -108,13 +108,6 @@ class MainWindow(QMainWindow):
         status_action.triggered.connect(self.table_widget._batch_set_status)
         menu.addAction(status_action)
 
-        enrich_action = QAction(
-            self.style().standardIcon(QStyle.SP_MediaPlay),
-            "Run AI Enrichment",
-            self,
-        )
-        enrich_action.triggered.connect(self._run_ai_enrichment)
-        menu.addAction(enrich_action)
 
         columns_action = QAction(
             self.style().standardIcon(QStyle.SP_FileDialogContentsView),
@@ -170,32 +163,6 @@ class MainWindow(QMainWindow):
         self.table_widget.load_contacts()
         self.show_status_message("Import completed")
 
-    def _run_ai_enrichment(self):
-        total = estimate_steps(self.db)
-        if total == 0:
-            self.show_status_message("No enrichment needed")
-            return
-        progress = QProgressDialog("Running AI enrichment...", None, 0, total, self)
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.setCancelButton(None)
-        self.table_widget.setDisabled(True)
-        self.search_bar.setDisabled(True)
-
-        def _progress(step, tot):
-            progress.setMaximum(tot)
-            progress.setValue(step)
-            QApplication.processEvents()
-
-        try:
-            enrich_database(self.db, progress_callback=_progress, status_callback=self.show_status_message)
-        except Exception as exc:  # noqa: BLE001
-            self.show_status_message(str(exc), 5000)
-        finally:
-            progress.close()
-            self.table_widget.setDisabled(False)
-            self.search_bar.setDisabled(False)
-            self.table_widget.load_contacts()
 
     def closeEvent(self, event):
         self.table_widget.save_layout()

@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QHBoxLayout,
+    QGroupBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -17,11 +18,13 @@ class FilterPopup(QWidget):
     sort_requested = pyqtSignal(Qt.SortOrder)
     closed = pyqtSignal()
 
-    def __init__(self, values, parent=None):
+    def __init__(self, values, field=None, ai_callback=None, parent=None):
         super().__init__(parent, Qt.Popup)
         self.setWindowFlags(Qt.Popup)
         self.setFocusPolicy(Qt.StrongFocus)
         self._all_values = sorted({str(v) for v in values})
+        self._field = field
+        self._ai_callback = ai_callback
         self._build_ui()
         self._populate()
 
@@ -54,6 +57,14 @@ class FilterPopup(QWidget):
         sort_row.addWidget(self.sort_asc)
         sort_row.addWidget(self.sort_desc)
         layout.addLayout(sort_row)
+
+        if self._ai_callback and self._field:
+            power_box = QGroupBox("AI Power Up")
+            power_layout = QVBoxLayout(power_box)
+            self.power_btn = QPushButton("Run Prompt")
+            self.power_btn.clicked.connect(lambda: self._ai_callback(self._field))
+            power_layout.addWidget(self.power_btn)
+            layout.addWidget(power_box)
 
     def _populate(self):
         text = self.search_edit.text().lower()

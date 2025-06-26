@@ -44,6 +44,11 @@ The company alias field is always generated automatically during enrichment.
 The application uses a fixed prompt that cannot be customized to produce a
 short, conversational version of the company name when the alias field is empty.
 
+Each column filter now includes an **AI Power Up** section. Clicking **Run
+Prompt** lets you apply the configured prompt template for that column to either
+a specific number of contacts, all contacts in the current view or the entire
+database. You can choose to override existing values or only fill missing ones.
+
 ## CSV Export
 
 When exporting contacts to CSV, the first column contains phone numbers and is labeled `phone_number` in the header. Remaining fields use snake_case headers derived from the table columns.
