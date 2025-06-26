@@ -76,6 +76,14 @@ def update_setting(path, value):
         obj = obj.setdefault(k, {})
     obj[keys[-1]] = value
     save_settings()
+    if path in (
+        "timezone.morning_call",
+        "timezone.afternoon_call",
+        "timezone.utc_offset",
+    ):
+        from update_call_times import update_call_times as _update_call_times
+
+        _update_call_times()
 
 
 def _merge_defaults(target, defaults):
