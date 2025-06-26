@@ -275,9 +275,12 @@ class ContactsTableWidget(QWidget):
                     item.setFlags(flags)
                     self.table.setItem(row, col, item)
 
-            self.table.setColumnHidden(col, not self.column_visibility[header])
         for idx, header in enumerate(self.HEADERS):
             self.table.setColumnHidden(idx, not self.column_visibility[header])
+            if self.column_visibility[header]:
+                header_view = self.table.horizontalHeader()
+                if header_view.sectionSize(idx) <= 0:
+                    header_view.resizeSection(idx, header_view.sectionSizeHint(idx))
         self.table.blockSignals(False)
         if not getattr(self, "column_widths", {}):
             self.table.resizeColumnsToContents()
@@ -415,8 +418,12 @@ class ContactsTableWidget(QWidget):
         if dialog.exec() == QDialog.Accepted:
             for header, cb in checkboxes.items():
                 self.column_visibility[header] = cb.isChecked()
-            for idx, header in enumerate(self.HEADERS):
-                self.table.setColumnHidden(idx, not self.column_visibility[header])
+            header_view = self.table.horizontalHeader()
+            for idx, h in enumerate(self.HEADERS):
+                self.table.setColumnHidden(idx, not self.column_visibility[h])
+                if self.column_visibility[h] and header_view.sectionSize(idx) <= 0:
+                    header_view.resizeSection(idx, header_view.sectionSizeHint(idx))
+            self.table.resizeColumnsToContents()
             self._status_callback("Column visibility updated")
             self.save_layout()
 
@@ -563,8 +570,14 @@ class ContactsTableWidget(QWidget):
                 header.moveSection(header.visualIndex(logical), target)
         for idx, name in enumerate(self.HEADERS):
             self.table.setColumnHidden(idx, not self.column_visibility.get(name, True))
+            width = None
             if name in getattr(self, "column_widths", {}):
-                header.resizeSection(idx, self.column_widths[name])
+                width = self.column_widths[name]
+                if width <= 0:
+                    width = None
+            if width is None:
+                width = header.sectionSizeHint(idx)
+            header.resizeSection(idx, width)
         self._update_header_styles()
 
     def save_layout(self):
