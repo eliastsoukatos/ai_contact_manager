@@ -4,12 +4,13 @@ from PyQt5.QtWidgets import (
     QPlainTextEdit,
     QDialogButtonBox,
     QLabel,
-    QHBoxLayout,
     QWidget,
+    QSizePolicy,
 )
 import re
 
 from config.settings import get_settings, update_setting
+from ui.flow_layout import FlowLayout
 
 
 class PromptEditDialog(QDialog):
@@ -26,7 +27,7 @@ class PromptEditDialog(QDialog):
         self.edit.setMinimumHeight(300)
         layout.addWidget(self.edit)
         self.vars_container = QWidget()
-        self.vars_layout = QHBoxLayout(self.vars_container)
+        self.vars_layout = FlowLayout(self.vars_container, spacing=4)
         self.vars_layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.vars_container)
         self.edit.textChanged.connect(self._update_vars)
@@ -53,5 +54,6 @@ class PromptEditDialog(QDialog):
             label.setStyleSheet(
                 "QLabel { border: 1px solid #888; border-radius: 4px; padding: 2px 4px; }"
             )
+            label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             self.vars_layout.addWidget(label)
         self.vars_container.setVisible(bool(vars_found))

@@ -111,7 +111,9 @@ class FilterPopup(QWidget):
         if not key:
             return
         dialog = PromptEditDialog(key, self)
-        dialog.exec()
+        dialog.setWindowModality(Qt.NonModal)
+        dialog.setAttribute(Qt.WA_DeleteOnClose)
+        dialog.show()
 
     def closeEvent(self, event):
         self.closed.emit()
