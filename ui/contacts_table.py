@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
+    QGridLayout,
     QLabel,
     QPushButton,
     QSpinBox,
@@ -188,6 +188,12 @@ class ContactsTableWidget(QWidget):
         header.customContextMenuRequested.connect(self._show_filter_context)
         self._filter_header = header
         self.table.cellClicked.connect(self._on_cell_clicked)
+        self.table.horizontalHeader().sectionClicked.connect(
+            self._on_header_section_clicked
+        )
+        self.table.verticalHeader().sectionClicked.connect(
+            self._on_row_section_clicked
+        )
         layout.addWidget(self.table)
 
         nav = QHBoxLayout()
@@ -457,15 +463,18 @@ class ContactsTableWidget(QWidget):
     def _customize_columns(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("Customize Columns")
-        form = QFormLayout(dialog)
+        grid = QGridLayout(dialog)
         checkboxes = {}
-        for header in self.HEADERS:
+        cols = 4
+        for idx, header in enumerate(self.HEADERS):
             cb = QCheckBox(header)
             cb.setChecked(self.column_visibility[header])
-            form.addRow(cb)
+            row = idx // cols
+            col = idx % cols
+            grid.addWidget(cb, row, col)
             checkboxes[header] = cb
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        form.addRow(buttons)
+        grid.addWidget(buttons, (len(self.HEADERS) + cols - 1) // cols + 1, 0, 1, cols)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         if dialog.exec() == QDialog.Accepted:
@@ -553,6 +562,10 @@ class ContactsTableWidget(QWidget):
 
     def _on_cell_clicked(self, row, column):
         if self.quick_mode not in {"add", "remove"}:
+            sel = self.table.selectionModel()
+            idx = self.table.model().index(row, column)
+            if sel.isSelected(idx) and len(sel.selectedIndexes()) == 1:
+                self.table.clearSelection()
             return
         if self.quick_mode == "add":
             if self.HEADERS[column] != "tags":
@@ -572,6 +585,18 @@ class ContactsTableWidget(QWidget):
         self._apply_filters()
         self.table.verticalScrollBar().setValue(scroll)
         self._status_callback("Tag removed")
+
+    def _on_header_section_clicked(self, index):
+        sel = self.table.selectionModel()
+        selected = [i.column() for i in sel.selectedColumns()]
+        if len(selected) == 1 and selected[0] == index:
+            self.table.clearSelection()
+
+    def _on_row_section_clicked(self, index):
+        sel = self.table.selectionModel()
+        selected = [i.row() for i in sel.selectedRows()]
+        if len(selected) == 1 and selected[0] == index:
+            self.table.clearSelection()
 
     def _change_page(self, delta: int):
         new_page = self.page + delta
