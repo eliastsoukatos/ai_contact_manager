@@ -533,3 +533,20 @@ class DBManager:
             return sorted(result)
 
         return sorted(str(v) for v in values if v is not None)
+
+    def get_columns(self) -> list[str]:
+        """Return a sorted list with all column names in the contacts table."""
+        self.create_contacts_table()
+        if self._columns_cache is None:
+            conn = self.connect()
+            cur = conn.cursor()
+            if self.use_postgres:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='contacts'"
+                )
+                self._columns_cache = {r[0] for r in cur.fetchall()}
+            else:
+                self._columns_cache = {
+                    row[1] for row in cur.execute("PRAGMA table_info(contacts)")
+                }
+        return sorted(self._columns_cache)

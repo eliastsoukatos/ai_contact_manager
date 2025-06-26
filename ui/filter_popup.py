@@ -66,9 +66,10 @@ class FilterPopup(QWidget):
             self.power_btn = QPushButton("Run Prompt")
             self.power_btn.clicked.connect(lambda: self._ai_callback(self._field))
             power_layout.addWidget(self.power_btn)
-            self.edit_btn = QPushButton("Edit Prompt")
-            self.edit_btn.clicked.connect(self._edit_prompt)
-            power_layout.addWidget(self.edit_btn)
+            if self._field in FIELD_TO_PROMPT:
+                self.edit_btn = QPushButton("Edit Prompt")
+                self.edit_btn.clicked.connect(self._edit_prompt)
+                power_layout.addWidget(self.edit_btn)
             layout.addWidget(power_box)
 
     def _populate(self):
