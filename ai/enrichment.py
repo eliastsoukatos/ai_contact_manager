@@ -62,7 +62,7 @@ def enrich_database(
     status_callback: Callable[[str], None] | None = None,
 ) -> None:
     if not is_configured():
-        raise RuntimeError("OpenAI API key or model not configured")
+        raise RuntimeError("LLM API key or model not configured")
     progress_callback = progress_callback or (lambda c, t: None)
     status_callback = status_callback or (lambda m: None)
 

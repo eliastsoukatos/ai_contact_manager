@@ -1,5 +1,9 @@
 from datetime import datetime
 from openai import OpenAI
+try:
+    from groq import Groq
+except Exception:  # pragma: no cover - optional dependency
+    Groq = None
 from config.settings import get_settings
 
 
@@ -15,27 +19,58 @@ COMPANY_ALIAS_PROMPT = (
 )
 
 
-def _get_openai_config():
+OPENAI_MODELS = {
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "gpt-4o-mini",
+    "o3-mini",
+}
+
+GROQ_MODELS = {
+    "gemma2-9b-it",
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "meta-llama/llama-guard-4-12b",
+}
+
+
+def _get_llm_config():
     settings = get_settings()
-    return settings.get("openai_api_key"), settings.get("llm_model"), settings.get("prompts", {})
+    return (
+        settings.get("openai_api_key"),
+        settings.get("groq_api_key"),
+        settings.get("llm_model"),
+        settings.get("prompts", {}),
+    )
 
 
 def is_configured() -> bool:
-    api_key, model, _ = _get_openai_config()
-    return bool(api_key and model)
+    oa_key, groq_key, model, _ = _get_llm_config()
+    if model in GROQ_MODELS:
+        return bool(groq_key and model)
+    return bool(oa_key and model)
 
 
 def get_prompt(name: str) -> str:
     if name == "company_alias":
         return COMPANY_ALIAS_PROMPT
-    _api, _model, prompts = _get_openai_config()
+    _oa, _groq, _model, prompts = _get_llm_config()
     return prompts.get(name, "")
 
 
 def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = True) -> str:
-    api_key, model, prompts = _get_openai_config()
-    if not api_key or not model:
-        raise RuntimeError("OpenAI API key or model not configured")
+    oa_key, groq_key, model, prompts = _get_llm_config()
+    if model in GROQ_MODELS:
+        api_key = groq_key
+        if not api_key or Groq is None:
+            raise RuntimeError("Groq API key or model not configured")
+        client = Groq(api_key=api_key)
+    else:
+        api_key = oa_key
+        if not api_key:
+            raise RuntimeError("OpenAI API key or model not configured")
+        client = OpenAI(api_key=api_key)
     if prompt_name == "company_alias":
         template = COMPANY_ALIAS_PROMPT
     else:
@@ -78,7 +113,6 @@ def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = Tr
             "explanation or extra formatting."
         )
 
-    client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
@@ -99,9 +133,17 @@ def lookup_utc_offset(
     date : str, optional
         Date in ``YYYY-MM-DD`` format. If omitted, today's UTC date is used.
     """
-    api_key, model, _ = _get_openai_config()
-    if not api_key or not model:
-        raise RuntimeError("OpenAI API key or model not configured")
+    oa_key, groq_key, model, _ = _get_llm_config()
+    if model in GROQ_MODELS:
+        api_key = groq_key
+        if not api_key or Groq is None:
+            raise RuntimeError("Groq API key or model not configured")
+        client = Groq(api_key=api_key)
+    else:
+        api_key = oa_key
+        if not api_key:
+            raise RuntimeError("OpenAI API key or model not configured")
+        client = OpenAI(api_key=api_key)
 
     date = date or datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -112,7 +154,6 @@ def lookup_utc_offset(
         f"Country: {country}\nState: {state}\nCity: {city}\nDate: {date}\nUTC offset:"
     )
 
-    client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
