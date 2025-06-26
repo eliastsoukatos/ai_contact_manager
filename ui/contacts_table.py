@@ -326,9 +326,7 @@ class ContactsTableWidget(QWidget):
 
     def _get_all_tags(self):
         tags = set(self.session_tags)
-        contacts = self.db.fetch_contacts()
-        for c in contacts:
-            tags.update(t.strip() for t in str(c.get("tags", "")).split(",") if t.strip())
+        tags.update(self.db.get_distinct_values("tags"))
         return sorted(tags)
 
     def _batch_add_tag(self):
