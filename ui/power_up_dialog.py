@@ -44,7 +44,7 @@ class PowerUpDialog(QDialog):
         override_layout.addWidget(self.empty_radio)
         layout.addWidget(override_box)
 
-        self.search_checkbox = QCheckBox("Búsqueda en Internet")
+        self.search_checkbox = QCheckBox("Internet Search")
         layout.addWidget(self.search_checkbox)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
