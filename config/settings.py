@@ -28,6 +28,7 @@ DEFAULT_SETTINGS = {
         "widths": {},
     },
     "export_fields": [],
+    "page_size": 50,
 }
 
 _settings = None

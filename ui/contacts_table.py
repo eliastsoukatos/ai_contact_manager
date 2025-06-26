@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QTableWidget,
     QTableWidgetItem,
     QComboBox,
@@ -10,6 +11,8 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QLabel,
+    QPushButton,
+    QSpinBox,
     QApplication,
     QFileDialog,
     QMessageBox,
@@ -78,6 +81,10 @@ class ContactsTableWidget(QWidget):
         self.quick_mode = None
         self.quick_tag = ""
         self.session_tags = set()
+        settings = get_settings()
+        self.page_size = int(settings.get("page_size", 50))
+        self.page = 0
+        self._has_next = False
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
@@ -125,13 +132,33 @@ class ContactsTableWidget(QWidget):
         self.table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self.table)
 
+        nav = QHBoxLayout()
+        self.prev_btn = QPushButton("Previous")
+        self.next_btn = QPushButton("Next")
+        self.page_label = QLabel()
+        self.page_size_spin = QSpinBox()
+        self.page_size_spin.setRange(1, 1000)
+        self.page_size_spin.setValue(self.page_size)
+        self.prev_btn.clicked.connect(lambda: self._change_page(-1))
+        self.next_btn.clicked.connect(lambda: self._change_page(1))
+        self.page_size_spin.editingFinished.connect(self._on_page_size_changed)
+        nav.addWidget(self.prev_btn)
+        nav.addWidget(self.next_btn)
+        nav.addWidget(self.page_label)
+        nav.addStretch(1)
+        nav.addWidget(QLabel("Page Size:"))
+        nav.addWidget(self.page_size_spin)
+        layout.addLayout(nav)
+
         self._apply_layout()
 
     def load_contacts(self):
+        self.page = 0
         self._apply_filters()
 
     def set_search_text(self, text: str):
         self.search_text = text
+        self.page = 0
         self._apply_filters()
 
 
@@ -141,13 +168,20 @@ class ContactsTableWidget(QWidget):
             sort_by = self.HEADERS[self.sort_column]
         sort_order = "desc" if self.sort_order == Qt.DescendingOrder else "asc"
         filters = {k: list(v) for k, v in self.filters.items()}
-        self.contacts = self.db.fetch_contacts(
+        contacts = self.db.fetch_contacts(
             filters=filters,
             search=self.search_text,
             sort_by=sort_by,
             sort_order=sort_order,
+            limit=self.page_size + 1,
+            offset=self.page * self.page_size,
         )
+        self._has_next = len(contacts) > self.page_size
+        self.contacts = contacts[: self.page_size]
         self._show_contacts(self.contacts)
+        self.prev_btn.setEnabled(self.page > 0)
+        self.next_btn.setEnabled(self._has_next)
+        self.page_label.setText(f"Page {self.page + 1}")
 
     def _show_contacts(self, contacts):
         self.filtered_contacts = contacts
@@ -421,6 +455,7 @@ class ContactsTableWidget(QWidget):
         else:
             self.filters[field] = selected
         self._update_header_styles()
+        self.page = 0
         self._apply_filters()
         self.save_layout()
 
@@ -428,6 +463,7 @@ class ContactsTableWidget(QWidget):
         self.sort_column = column
         self.sort_order = order
         popup.hide()
+        self.page = 0
         self._apply_filters()
         self.save_layout()
 
@@ -479,6 +515,24 @@ class ContactsTableWidget(QWidget):
         self._apply_filters()
         self.table.verticalScrollBar().setValue(scroll)
         self._status_callback("Tag removed")
+
+    def _change_page(self, delta: int):
+        new_page = self.page + delta
+        if new_page < 0:
+            return
+        if delta > 0 and not self._has_next:
+            return
+        self.page = new_page
+        self._apply_filters()
+
+    def _on_page_size_changed(self):
+        size = self.page_size_spin.value()
+        if size <= 0:
+            return
+        self.page_size = size
+        update_setting("page_size", size)
+        self.page = 0
+        self._apply_filters()
 
     def _load_layout(self):
         settings = get_settings().get("table_layout", {})

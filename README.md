@@ -9,6 +9,7 @@ A small demo application for importing Cognism CSV files into a SQLite database 
 * **ui/settings_panel.py** – user interface for editing API keys, prompt templates and time zone options.
 * **config/settings.py** – loads and saves persistent configuration in the user's home directory.
 * **main.py** – launches the application window and wires up the components. All actions are available from a hamburger menu in the header, including a **Settings** option for configuration.
+* Supports paginated views with a configurable page size so exports only include the currently visible contacts.
 
 Import contacts by creating a `CSVImporter` instance pointing to your CSV file and calling `import_contacts()` or using the **Import CSV** button in the GUI.
 
@@ -46,6 +47,7 @@ short, conversational version of the company name when the alias field is empty.
 ## CSV Export
 
 When exporting contacts to CSV, the first column contains phone numbers and is labeled `phone_number` in the header. Remaining fields use snake_case headers derived from the table columns.
+Only the contacts visible on the current page are exported when pagination is enabled.
 
 ## PostgreSQL Setup
 
