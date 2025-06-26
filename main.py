@@ -117,6 +117,22 @@ class MainWindow(QMainWindow):
         columns_action.triggered.connect(self.table_widget._customize_columns)
         menu.addAction(columns_action)
 
+        add_col_action = QAction(
+            self.style().standardIcon(QStyle.SP_FileDialogNewFolder),
+            "Add Column",
+            self,
+        )
+        add_col_action.triggered.connect(self.table_widget.add_custom_column)
+        menu.addAction(add_col_action)
+
+        del_col_action = QAction(
+            self.style().standardIcon(QStyle.SP_TrashIcon),
+            "Delete Column",
+            self,
+        )
+        del_col_action.triggered.connect(self.table_widget.delete_custom_column)
+        menu.addAction(del_col_action)
+
         settings_action = QAction(
             self.style().standardIcon(QStyle.SP_FileDialogDetailedView),
             "Settings",

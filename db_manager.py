@@ -550,3 +550,37 @@ class DBManager:
                     row[1] for row in cur.execute("PRAGMA table_info(contacts)")
                 }
         return sorted(self._columns_cache)
+
+    def add_column(self, name: str) -> None:
+        """Create a new TEXT column in the contacts table."""
+        if not name:
+            return
+        self.create_contacts_table()
+        if name in self.get_columns():
+            return
+        conn = self.connect()
+        cur = conn.cursor()
+        if self.use_postgres:
+            cur.execute(f'ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "{name}" TEXT')
+        else:
+            cur.execute(f'ALTER TABLE contacts ADD COLUMN "{name}" TEXT')
+        conn.commit()
+        if self._columns_cache is not None:
+            self._columns_cache.add(name)
+
+    def remove_column(self, name: str) -> None:
+        """Drop a column from the contacts table."""
+        if not name:
+            return
+        self.create_contacts_table()
+        if name not in self.get_columns():
+            return
+        conn = self.connect()
+        cur = conn.cursor()
+        if self.use_postgres:
+            cur.execute(f'ALTER TABLE contacts DROP COLUMN IF EXISTS "{name}"')
+        else:
+            cur.execute(f'ALTER TABLE contacts DROP COLUMN IF EXISTS "{name}"')
+        conn.commit()
+        if self._columns_cache is not None and name in self._columns_cache:
+            self._columns_cache.remove(name)
