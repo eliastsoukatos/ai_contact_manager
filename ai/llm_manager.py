@@ -1,3 +1,4 @@
+from datetime import datetime
 from openai import OpenAI
 from config.settings import get_settings
 
@@ -86,17 +87,29 @@ def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = Tr
     return text.strip() if clean else text
 
 
-def lookup_utc_offset(country: str, state: str, city: str) -> str:
-    """Return UTC offset for the given location using a dedicated prompt."""
+def lookup_utc_offset(
+    country: str, state: str, city: str, date: str | None = None
+) -> str:
+    """Return UTC offset for the given location using a dedicated prompt.
+
+    Parameters
+    ----------
+    country, state, city : str
+        Location information used for the lookup.
+    date : str, optional
+        Date in ``YYYY-MM-DD`` format. If omitted, today's UTC date is used.
+    """
     api_key, model, _ = _get_openai_config()
     if not api_key or not model:
         raise RuntimeError("OpenAI API key or model not configured")
+
+    date = date or datetime.utcnow().strftime("%Y-%m-%d")
 
     prompt = (
         "Given the following information, provide ONLY the UTC offset as an "
         "integer (e.g. -4, 0, +2, etc.). If the location is not available or "
         "incomplete, respond with NA. Do not add any explanation or extra text.\n"
-        f"Country: {country}\nState: {state}\nCity: {city}\nUTC offset:"
+        f"Country: {country}\nState: {state}\nCity: {city}\nDate: {date}\nUTC offset:"
     )
 
     client = OpenAI(api_key=api_key)
