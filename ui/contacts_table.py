@@ -123,6 +123,7 @@ class ContactsTableWidget(QWidget):
         self.page_size = int(settings.get("page_size", 50))
         self.page = 0
         self._has_next = False
+        self._ignore_cell_toggle = False
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
@@ -650,6 +651,9 @@ class ContactsTableWidget(QWidget):
             self._status_callback(f"Copied '{value}' to clipboard")
 
     def _on_cell_clicked(self, row, column):
+        if self._ignore_cell_toggle:
+            self._ignore_cell_toggle = False
+            return
         if self.quick_mode not in {"add", "remove"}:
             sel = self.table.selectionModel()
             idx = self.table.model().index(row, column)
@@ -682,6 +686,7 @@ class ContactsTableWidget(QWidget):
             self.table.clearSelection()
         else:
             self.table.selectColumn(index)
+        self._ignore_cell_toggle = True
 
     def _on_row_section_clicked(self, index):
         sel = self.table.selectionModel()
@@ -690,6 +695,7 @@ class ContactsTableWidget(QWidget):
             self.table.clearSelection()
         else:
             self.table.selectRow(index)
+        self._ignore_cell_toggle = True
 
     def _change_page(self, delta: int):
         new_page = self.page + delta
