@@ -71,6 +71,23 @@ export POSTGRES_DSN="postgresql://contacts_user:password@localhost/contacts_db"
 Run `python migrate_sqlite_to_postgres.py` to copy existing data from the old
 `contacts.db` file into PostgreSQL.
 
+## Updating Call Times
+
+If the time zone configuration changes or you notice incorrect `morning_call_time`
+and `afternoon_call_time` values, run the helper script below to recalculate the
+times for all contacts:
+
+```bash
+python update_call_times.py
+```
+
+Use `--force-lookup` to look up missing UTC offsets via the OpenAI API before
+recomputing the call windows.
+
+Call times are automatically updated whenever you change the morning or
+afternoon call windows or your own time zone offset in the **Settings**
+dialog.
+
 ## Running the Go Backend
 
 This project includes a small Go service that performs all contact searching and filtering. The Python UI communicates with this service over HTTP.
