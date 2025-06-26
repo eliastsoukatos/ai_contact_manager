@@ -518,12 +518,18 @@ class DBManager:
             raise ValueError(f"Invalid column name: {column}")
 
         cur.execute(f'SELECT DISTINCT "{column}" FROM contacts')
-        values = [row[0] for row in cur.fetchall() if row[0] is not None]
+        values = [row[0] for row in cur.fetchall()]
 
         if column == "tags":
             result = set()
+            blank = False
             for val in values:
+                if val is None or str(val).strip() == "":
+                    blank = True
+                    continue
                 result.update(t.strip() for t in str(val).split(',') if t.strip())
+            if blank:
+                result.add("")
             return sorted(result)
 
-        return sorted(str(v) for v in values)
+        return sorted(str(v) for v in values if v is not None)
