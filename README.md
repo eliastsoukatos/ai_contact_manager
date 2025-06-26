@@ -73,9 +73,11 @@ Run `python migrate_sqlite_to_postgres.py` to copy existing data from the old
 
 ## Updating Call Times
 
-If the time zone configuration changes or you notice incorrect `morning_call_time`
+If you change the time zone settings or notice incorrect `morning_call_time`
 and `afternoon_call_time` values, run the helper script below to recalculate the
-times for all contacts:
+times for all contacts. The application also refreshes these fields automatically
+whenever `timezone.utc_offset`, `timezone.morning_call` or `timezone.afternoon_call`
+are modified:
 
 ```bash
 python update_call_times.py
