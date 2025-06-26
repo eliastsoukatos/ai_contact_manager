@@ -74,28 +74,7 @@ class SettingsDialog(QDialog):
 
         layout.addLayout(form)
 
-        # Prompts section
-        prompts_box = QGroupBox("Prompt Templates")
-        prompts_layout = QFormLayout(prompts_box)
-        psettings = self._settings.get("prompts", {})
-        self.prompt_edits = {}
-        prompts = [
-            ("target_company_validation", "Target Company Validation"),
-            ("icp_validation", "ICP Validation"),
-            ("clients_of_contact", "Clients of Contact"),
-            ("area_of_business", "Area of Business"),
-            ("most_relevant_summit", "Most Relevant Summit"),
-            ("client_icp", "ICP of the Client"),
-        ]
-        for key, label in prompts:
-            edit = QPlainTextEdit(psettings.get(key, ""))
-            edit.setToolTip(f"Prompt template for {label}")
-            edit.textChanged.connect(
-                lambda k=key, e=edit: update_setting(f"prompts.{k}", e.toPlainText())
-            )
-            prompts_layout.addRow(label, edit)
-            self.prompt_edits[key] = edit
-        layout.addWidget(prompts_box)
+
 
         # Time zone settings
         tz_box = QGroupBox("Time Zone")

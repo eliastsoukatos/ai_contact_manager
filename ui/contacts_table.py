@@ -39,6 +39,7 @@ from ui.export_dialog import ExportOptionsDialog
 from exporter import export_contacts
 from ui.power_up_dialog import PowerUpDialog
 from ai.llm_manager import run_prompt, lookup_utc_offset
+from ai.prompts import FIELD_TO_PROMPT
 from ai.enrichment import _calculate_call_times
 from utils import (
     disposition_to_status,
@@ -713,15 +714,7 @@ class ContactsTableWidget(QWidget):
         else:
             contacts = self.db.fetch_contacts()
 
-        mapping = {
-            "target_company": "target_company_validation",
-            "contact_icp_status": "icp_validation",
-            "clients_of_contact": "clients_of_contact",
-            "area_of_business": "area_of_business",
-            "most_relevant_summit": "most_relevant_summit",
-            "client_icp": "client_icp",
-            "company_alias": "company_alias",
-        }
+        mapping = FIELD_TO_PROMPT
 
         progress = QProgressDialog("Running AI Power Up...", None, 0, len(contacts), self)
         progress.setWindowModality(Qt.WindowModal)

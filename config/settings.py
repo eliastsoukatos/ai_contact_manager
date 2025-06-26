@@ -17,6 +17,7 @@ DEFAULT_SETTINGS = {
         "area_of_business": "",
         "most_relevant_summit": "",
         "client_icp": "",
+        "company_alias": "",
     },
     "timezone": {
         "utc_offset": 0,

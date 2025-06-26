@@ -53,9 +53,9 @@ def is_configured() -> bool:
 
 
 def get_prompt(name: str) -> str:
-    if name == "company_alias":
-        return COMPANY_ALIAS_PROMPT
     _oa, _groq, _model, prompts = _get_llm_config()
+    if name == "company_alias":
+        return prompts.get(name, COMPANY_ALIAS_PROMPT)
     return prompts.get(name, "")
 
 
@@ -77,7 +77,7 @@ def run_prompt(
             raise RuntimeError("OpenAI API key or model not configured")
         client = OpenAI(api_key=api_key)
     if prompt_name == "company_alias":
-        template = COMPANY_ALIAS_PROMPT
+        template = prompts.get(prompt_name, COMPANY_ALIAS_PROMPT)
     else:
         template = prompts.get(prompt_name)
         if not template:
