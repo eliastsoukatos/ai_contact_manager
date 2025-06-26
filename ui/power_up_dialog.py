@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QRadioButton,
     QSpinBox,
     QGroupBox,
+    QCheckBox,
 )
 
 
@@ -43,6 +44,9 @@ class PowerUpDialog(QDialog):
         override_layout.addWidget(self.empty_radio)
         layout.addWidget(override_box)
 
+        self.search_checkbox = QCheckBox("Búsqueda en Internet")
+        layout.addWidget(self.search_checkbox)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -59,4 +63,5 @@ class PowerUpDialog(QDialog):
             "scope": scope,
             "limit": self.limit_spin.value(),
             "override": self.override_radio.isChecked(),
+            "web_search": self.search_checkbox.isChecked(),
         }

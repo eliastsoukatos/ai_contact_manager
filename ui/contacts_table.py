@@ -703,7 +703,7 @@ class ContactsTableWidget(QWidget):
                 else:
                     prompt = mapping.get(field)
                     if prompt:
-                        result = run_prompt(prompt, contact)
+                        result = run_prompt(prompt, contact, web_search=opts.get("web_search", False))
                         self.db.update_contact(contact["profile_id"], {field: result})
             except Exception as exc:  # noqa: BLE001
                 self._status_callback(str(exc))

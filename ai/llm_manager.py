@@ -59,7 +59,12 @@ def get_prompt(name: str) -> str:
     return prompts.get(name, "")
 
 
-def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = True) -> str:
+def run_prompt(
+    prompt_name: str,
+    variables: dict | None = None,
+    clean: bool = True,
+    web_search: bool = False,
+) -> str:
     oa_key, groq_key, model, prompts = _get_llm_config()
     if model in GROQ_MODELS:
         api_key = groq_key
@@ -113,11 +118,21 @@ def run_prompt(prompt_name: str, variables: dict | None = None, clean: bool = Tr
             "explanation or extra formatting."
         )
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = response.choices[0].message.content
+    if web_search:
+        if model not in OPENAI_MODELS:
+            raise RuntimeError("Web search is only supported for OpenAI models")
+        response = client.responses.create(
+            model=model,
+            tools=[{"type": "web_search_preview"}],
+            input=prompt,
+        )
+        text = response.output_text
+    else:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.choices[0].message.content
     return text.strip() if clean else text
 
 
