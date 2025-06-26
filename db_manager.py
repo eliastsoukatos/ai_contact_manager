@@ -302,6 +302,11 @@ class DBManager:
     ):
         """Fetch contacts via the Go API backend."""
 
+        # Ensure the contacts table exists with all expected columns before
+        # delegating to the Go service. Without this the table may lack newer
+        # columns when the backend created it earlier.
+        self.create_contacts_table()
+
         payload = {
             "filters": filters or {},
             "search": search or "",

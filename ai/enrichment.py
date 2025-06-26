@@ -33,7 +33,7 @@ def _calculate_call_times(offset: str) -> tuple[str, str]:
     except (TypeError, ValueError):
         return "NA", "NA"
 
-    diff = contact_offset - user_offset
+    diff = user_offset - contact_offset
     return _shift_time(morning, diff), _shift_time(afternoon, diff)
 
 
