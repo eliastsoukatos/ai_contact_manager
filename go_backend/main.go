@@ -101,6 +101,23 @@ func fetchContacts(db *sql.DB, req *QueryRequest) ([]map[string]any, error) {
 		if len(values) == 0 {
 			continue
 		}
+		if col == "tags" {
+			tagParts := make([]string, 0, len(values))
+			for _, v := range values {
+				if v == "" {
+					tagParts = append(tagParts, "(\"tags\" = '' OR \"tags\" IS NULL)")
+					continue
+				}
+				p1, p2, p3, p4 := nextPH(), nextPH(), nextPH(), nextPH()
+				params = append(params, v, v+",%", "%,"+v, "%,"+v+",%")
+				tagParts = append(tagParts,
+					fmt.Sprintf("(\"tags\" = %s OR \"tags\" LIKE %s OR \"tags\" LIKE %s OR \"tags\" LIKE %s)", p1, p2, p3, p4))
+			}
+			if len(tagParts) > 0 {
+				clauses = append(clauses, "("+strings.Join(tagParts, " OR ")+")")
+			}
+			continue
+		}
 		ph := make([]string, len(values))
 		for i, v := range values {
 			ph[i] = nextPH()

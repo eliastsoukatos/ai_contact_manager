@@ -348,15 +348,33 @@ class DBManager:
                     if column not in valid_columns:
                         raise ValueError(f"Invalid column name: {column}")
                     ph = "%s" if self.use_postgres else "?"
-                    if isinstance(value, (list, tuple, set)):
-                        if len(value) == 0:
-                            continue
-                        ph_list = ",".join([ph] * len(value))
-                        clauses.append(f'"{column}" IN ({ph_list})')
-                        params.extend(list(value))
+                    values = value if isinstance(value, (list, tuple, set)) else [value]
+                    if not values:
+                        continue
+                    if column == "tags":
+                        tag_clauses = []
+                        for tag in values:
+                            if not tag:
+                                tag_clauses.append('(\"tags\" = "" OR \"tags\" IS NULL)')
+                                continue
+                            tag_clauses.append(
+                                f'(\"tags\" = {ph} OR \"tags\" LIKE {ph} OR \"tags\" LIKE {ph} OR \"tags\" LIKE {ph})'
+                            )
+                            params.extend([
+                                tag,
+                                f"{tag},%",
+                                f"%,{tag}",
+                                f"%,{tag},%",
+                            ])
+                        clauses.append("(" + " OR ".join(tag_clauses) + ")")
                     else:
-                        clauses.append(f'"{column}" = {ph}')
-                        params.append(value)
+                        if len(values) > 1:
+                            ph_list = ",".join([ph] * len(values))
+                            clauses.append(f'"{column}" IN ({ph_list})')
+                            params.extend(list(values))
+                        else:
+                            clauses.append(f'"{column}" = {ph}')
+                            params.append(values[0])
 
             if search:
                 search_columns = [
