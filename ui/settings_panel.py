@@ -32,7 +32,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
-        # API Key
+        # API Keys
         self.api_key_edit = QLineEdit(self._settings.get("openai_api_key", ""))
         self.api_key_edit.setEchoMode(QLineEdit.Password)
         self.api_key_edit.setPlaceholderText("sk-...")
@@ -42,15 +42,30 @@ class SettingsDialog(QDialog):
         )
         form.addRow("OpenAI API Key", self.api_key_edit)
 
+        self.groq_key_edit = QLineEdit(self._settings.get("groq_api_key", ""))
+        self.groq_key_edit.setEchoMode(QLineEdit.Password)
+        self.groq_key_edit.setPlaceholderText("gsk-...")
+        self.groq_key_edit.setToolTip("Your Groq API key")
+        self.groq_key_edit.editingFinished.connect(
+            lambda: update_setting("groq_api_key", self.groq_key_edit.text())
+        )
+        form.addRow("Groq API Key", self.groq_key_edit)
+
         # Model selection
         self.model_combo = QComboBox()
-        self.model_combo.addItems([
-            "gpt-4.1",
-            "gpt-4.1-mini",
-            "gpt-4.1-nano",
-            "gpt-4o-mini",
-            "o3-mini",
-        ])
+        self.model_combo.addItems(
+            [
+                "gpt-4.1",
+                "gpt-4.1-mini",
+                "gpt-4.1-nano",
+                "gpt-4o-mini",
+                "o3-mini",
+                "gemma2-9b-it",
+                "llama-3.1-8b-instant",
+                "llama-3.3-70b-versatile",
+                "meta-llama/llama-guard-4-12b",
+            ]
+        )
         self.model_combo.setCurrentText(self._settings.get("llm_model", "gpt-4.1"))
         self.model_combo.currentIndexChanged[str].connect(
             lambda text: update_setting("llm_model", text)

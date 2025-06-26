@@ -8,6 +8,7 @@ CONFIG_FILE = Path.home() / ".ai_contact_manager_config.json"
 
 DEFAULT_SETTINGS = {
     "openai_api_key": "",
+    "groq_api_key": "",
     "llm_model": "gpt-4.1",
     "prompts": {
         "target_company_validation": "",

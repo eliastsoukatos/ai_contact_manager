@@ -38,6 +38,31 @@ Available models you can select are:
 - `gpt-4o-mini`
 - `o3-mini`
 
+## Using Groq
+
+The application can also use Groq's Chat Completions API. Install the
+`groq` Python package and enter your Groq API key in the **Settings** dialog.
+
+```python
+from groq import Groq
+
+client = Groq()
+
+chat_completion = client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[{"role": "user", "content": "Explain the importance of fast language models"}],
+)
+
+print(chat_completion.choices[0].message.content)
+```
+
+Available Groq models you can select are:
+
+- `gemma2-9b-it`
+- `llama-3.1-8b-instant`
+- `llama-3.3-70b-versatile`
+- `meta-llama/llama-guard-4-12b`
+
 Use only the base model name (e.g. `"gpt-4.1"`) without any date suffixes.
 
 The company alias field is always generated automatically during enrichment.
@@ -88,7 +113,7 @@ are modified:
 python update_call_times.py
 ```
 
-Use `--force-lookup` to look up missing UTC offsets via the OpenAI API before
+Use `--force-lookup` to look up missing UTC offsets via the configured LLM API before
 recomputing the call windows.
 
 ## Running the Go Backend

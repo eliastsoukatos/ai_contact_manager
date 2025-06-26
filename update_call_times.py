@@ -10,7 +10,7 @@ def update_call_times(force_lookup: bool = False) -> int:
     ----------
     force_lookup : bool, optional
         If True, lookup the UTC offset for contacts missing the ``time_zone_utc``
-        field using the OpenAI API. Otherwise only contacts with an existing
+        field using the OpenAI or Groq API. Otherwise only contacts with an existing
         ``time_zone_utc`` value will be processed.
 
     Returns
@@ -59,7 +59,7 @@ def main() -> None:
     parser.add_argument(
         "--force-lookup",
         action="store_true",
-        help="lookup missing UTC offsets using OpenAI",
+        help="lookup missing UTC offsets using the configured LLM",
     )
     args = parser.parse_args()
     updated = update_call_times(force_lookup=args.force_lookup)
