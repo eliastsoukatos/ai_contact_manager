@@ -417,6 +417,7 @@ class ContactsTableWidget(QWidget):
                 self.column_visibility[header] = cb.isChecked()
             for idx, header in enumerate(self.HEADERS):
                 self.table.setColumnHidden(idx, not self.column_visibility[header])
+            self.table.resizeColumnsToContents()
             self._status_callback("Column visibility updated")
             self.save_layout()
 
@@ -565,6 +566,8 @@ class ContactsTableWidget(QWidget):
             self.table.setColumnHidden(idx, not self.column_visibility.get(name, True))
             if name in getattr(self, "column_widths", {}):
                 header.resizeSection(idx, self.column_widths[name])
+            else:
+                header.resizeSection(idx, header.sectionSizeHint(idx))
         self._update_header_styles()
 
     def save_layout(self):
