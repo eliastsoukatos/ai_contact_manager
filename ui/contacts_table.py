@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QFileDialog,
     QMessageBox,
+    QProgressDialog,
 )
 from PyQt5.QtGui import QBrush
 from PyQt5.QtCore import Qt, QPoint
@@ -29,6 +30,9 @@ from ui.filter_header import FilterHeader
 from ui.tag_tools import TagSelectionDialog, ModeIndicator, TagsCellWidget
 from ui.export_dialog import ExportOptionsDialog
 from exporter import export_contacts
+from ui.power_up_dialog import PowerUpDialog
+from ai.llm_manager import run_prompt, lookup_utc_offset
+from ai.enrichment import _calculate_call_times
 from utils import (
     disposition_to_status,
     disposition_to_color,
@@ -425,7 +429,7 @@ class ContactsTableWidget(QWidget):
             return
         field = self.HEADERS[logical]
         values = self.db.get_distinct_values(field)
-        popup = FilterPopup(values, self)
+        popup = FilterPopup(values, field, self._run_ai_power_up, self)
         if field in self.filters:
             popup.set_selected(self.filters[field])
         popup.selection_changed.connect(
@@ -633,6 +637,82 @@ class ContactsTableWidget(QWidget):
             f"Created {files} file(s) in {export_path}",
         )
         self._status_callback("Export completed")
+
+    def _run_ai_power_up(self, field):
+        """Run the configured AI prompt for the given column."""
+        dialog = PowerUpDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        opts = dialog.options()
+
+        if opts["scope"] == "limit":
+            limit = opts["limit"]
+            contacts = self.db.fetch_contacts(
+                filters={k: list(v) for k, v in self.filters.items()},
+                search=self.search_text,
+                sort_by=self.HEADERS[self.sort_column] if self.sort_column is not None else "",
+                sort_order="desc" if self.sort_order == Qt.DescendingOrder else "asc",
+                limit=limit,
+            )
+        elif opts["scope"] == "view":
+            contacts = self.db.fetch_contacts(
+                filters={k: list(v) for k, v in self.filters.items()},
+                search=self.search_text,
+                sort_by=self.HEADERS[self.sort_column] if self.sort_column is not None else "",
+                sort_order="desc" if self.sort_order == Qt.DescendingOrder else "asc",
+            )
+        else:
+            contacts = self.db.fetch_contacts()
+
+        mapping = {
+            "target_company": "target_company_validation",
+            "contact_icp_status": "icp_validation",
+            "clients_of_contact": "clients_of_contact",
+            "area_of_business": "area_of_business",
+            "most_relevant_summit": "most_relevant_summit",
+            "client_icp": "client_icp",
+            "company_alias": "company_alias",
+        }
+
+        progress = QProgressDialog("Running AI Power Up...", None, 0, len(contacts), self)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setCancelButton(None)
+
+        for step, contact in enumerate(contacts, start=1):
+            if not opts["override"] and contact.get(field):
+                progress.setValue(step)
+                QApplication.processEvents()
+                continue
+            try:
+                if field == "time_zone_utc":
+                    offset = lookup_utc_offset(
+                        contact.get("country", ""),
+                        contact.get("state", ""),
+                        contact.get("city", ""),
+                    )
+                    morning, afternoon = _calculate_call_times(offset)
+                    self.db.update_contact(
+                        contact["profile_id"],
+                        {
+                            "time_zone_utc": offset,
+                            "morning_call_time": morning,
+                            "afternoon_call_time": afternoon,
+                        },
+                    )
+                else:
+                    prompt = mapping.get(field)
+                    if prompt:
+                        result = run_prompt(prompt, contact)
+                        self.db.update_contact(contact["profile_id"], {field: result})
+            except Exception as exc:  # noqa: BLE001
+                self._status_callback(str(exc))
+            progress.setValue(step)
+            QApplication.processEvents()
+
+        progress.close()
+        self.load_contacts()
+        self._status_callback("AI Power Up completed")
 
 
 
