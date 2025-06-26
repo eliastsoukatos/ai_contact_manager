@@ -52,7 +52,7 @@ from utils import (
 class ContactsTableWidget(QWidget):
     """Widget displaying contacts with filtering and batch actions."""
 
-    HEADERS = [
+    BASE_HEADERS = [
         "mobile",
         "first_name",
         "last_name",
@@ -87,17 +87,21 @@ class ContactsTableWidget(QWidget):
         "most_relevant_summit",
         "client_icp",
         "company_alias",
-        "time_zone_utc",
     ]
 
     def __init__(self, db: DBManager, status_callback=None, parent=None):
         super().__init__(parent)
         self.db = db
         self._status_callback = status_callback or (lambda *args, **kwargs: None)
+        all_cols = self.db.get_columns()
+        self.HEADERS = self.BASE_HEADERS[:]
+        for col in all_cols:
+            if col not in self.HEADERS:
+                self.HEADERS.append(col)
+        self.column_visibility = {h: (h in self.BASE_HEADERS) for h in self.HEADERS}
         self.contacts = []
         self.filtered_contacts = []
         self.search_text = ""
-        self.column_visibility = {h: True for h in self.HEADERS}
         self.filters = {}
         self.sort_column = None
         self.sort_order = Qt.AscendingOrder

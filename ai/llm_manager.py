@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from openai import OpenAI
 try:
     from groq import Groq
@@ -84,31 +85,11 @@ def run_prompt(
             raise RuntimeError(f"Prompt template '{prompt_name}' not configured")
     variables = variables or {}
 
-    # Format the user's template with the given variables
-    prompt = template.format(**variables)
+    # Replace {{var}} placeholders with the corresponding values
+    def _replace(match: re.Match) -> str:
+        return str(variables.get(match.group(1), ""))
 
-    # Build contextual lines with available variables
-    context_lines = []
-    key_map = {
-        "company_name": "Company Name",
-        "headcount": "Headcount",
-        "company_description": "Company Description",
-        "first_name": "First Name",
-        "last_name": "Last Name",
-        "job_title": "Job Title",
-    }
-    for key, label in key_map.items():
-        value = variables.get(key)
-        if value:
-            context_lines.append(f"{label}: {value}")
-
-    for key, value in variables.items():
-        if key not in key_map and value not in (None, ""):
-            pretty = key.replace("_", " ").title()
-            context_lines.append(f"{pretty}: {value}")
-
-    if context_lines:
-        prompt = f"{prompt}\n\n" + "\n".join(context_lines)
+    prompt = re.sub(r"\{\{\s*(\w+)\s*\}\}", _replace, template)
 
     if prompt_name in {"target_company_validation", "icp_validation"}:
         prompt += '\n\nAnswer ONLY "Yes" or "No". Do not add anything else.'
