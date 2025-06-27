@@ -72,7 +72,17 @@ def get_prompt(name: str) -> str:
     return prompts.get(name, "")
 
 
-def run_prompt(
+def _sanitize_yes_no(text: str) -> str:
+    t = text.strip().rstrip(".").strip()
+    lower = t.lower()
+    if lower.startswith("yes"):
+        return "Yes"
+    if lower.startswith("no"):
+        return "No"
+    return t
+
+
+def _run_prompt_once(
     prompt_name: str,
     variables: dict | None = None,
     clean: bool = True,
@@ -166,7 +176,31 @@ def run_prompt(
             )
             text = response.choices[0].message.content
     print("[LLM] response received")
-    return text.strip() if clean else text
+    result = text.strip() if clean else text
+    if prompt_name in {"target_company_validation", "icp_validation"}:
+        result = _sanitize_yes_no(result)
+    return result
+
+
+def run_prompt(
+    prompt_name: str,
+    variables: dict | None = None,
+    clean: bool = True,
+    web_search: bool = False,
+    double_check: bool = False,
+) -> str:
+    if (
+        double_check
+        and prompt_name in {"target_company_validation", "icp_validation"}
+    ):
+        first = _run_prompt_once(prompt_name, variables, clean, web_search)
+        second = _run_prompt_once(prompt_name, variables, clean, web_search)
+        if first == second:
+            return first
+        third = _run_prompt_once(prompt_name, variables, clean, web_search)
+        yes_count = [first, second, third].count("Yes")
+        return "Yes" if yes_count >= 2 else "No"
+    return _run_prompt_once(prompt_name, variables, clean, web_search)
 
 
 def run_prompt_async(
@@ -174,9 +208,12 @@ def run_prompt_async(
     variables: dict | None = None,
     clean: bool = True,
     web_search: bool = False,
+    double_check: bool = False,
 ) -> Future:
     """Run ``run_prompt`` in a background thread and return a ``Future``."""
-    return _EXECUTOR.submit(run_prompt, prompt_name, variables, clean, web_search)
+    return _EXECUTOR.submit(
+        run_prompt, prompt_name, variables, clean, web_search, double_check
+    )
 
 
 def lookup_utc_offset(
