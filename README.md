@@ -63,6 +63,40 @@ Available Groq models you can select are:
 - `llama-3.3-70b-versatile`
 - `meta-llama/llama-guard-4-12b`
 
+## Using Perplexity
+
+The application also supports Perplexity's API. Enter your Perplexity API key
+and choose one of the available models in the **Settings** dialog.
+
+```python
+import requests
+
+headers = {
+    "authorization": "Bearer YOUR_API_KEY",
+    "content-type": "application/json",
+}
+
+payload = {
+    "model": "sonar-pro",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "stream": False,
+    "search_mode": "web",
+    "web_search_options": {"search_context_size": "low"},
+}
+
+response = requests.post(
+    "https://api.perplexity.ai/chat/completions",
+    headers=headers,
+    json=payload,
+)
+print(response.json()["choices"][0]["message"]["content"])
+```
+
+Available Perplexity models you can select are:
+
+- `sonar`
+- `sonar-pro`
+
 Use only the base model name (e.g. `"gpt-4.1"`) without any date suffixes.
 
 The company alias field is always generated automatically during enrichment.

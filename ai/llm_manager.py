@@ -36,6 +36,11 @@ GROQ_MODELS = {
     "meta-llama/llama-guard-4-12b",
 }
 
+PERPLEXITY_MODELS = {
+    "sonar",
+    "sonar-pro",
+}
+
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
@@ -45,20 +50,23 @@ def _get_llm_config():
     return (
         settings.get("openai_api_key"),
         settings.get("groq_api_key"),
+        settings.get("perplexity_api_key"),
         settings.get("llm_model"),
         settings.get("prompts", {}),
     )
 
 
 def is_configured() -> bool:
-    oa_key, groq_key, model, _ = _get_llm_config()
+    oa_key, groq_key, pplx_key, model, _ = _get_llm_config()
     if model in GROQ_MODELS:
         return bool(groq_key and model)
+    if model in PERPLEXITY_MODELS:
+        return bool(pplx_key and model)
     return bool(oa_key and model)
 
 
 def get_prompt(name: str) -> str:
-    _oa, _groq, _model, prompts = _get_llm_config()
+    _oa, _groq, _pplx, _model, prompts = _get_llm_config()
     if name == "company_alias":
         return prompts.get(name, COMPANY_ALIAS_PROMPT)
     return prompts.get(name, "")
@@ -70,13 +78,19 @@ def run_prompt(
     clean: bool = True,
     web_search: bool = False,
 ) -> str:
-    oa_key, groq_key, model, prompts = _get_llm_config()
+    oa_key, groq_key, pplx_key, model, prompts = _get_llm_config()
     if model in GROQ_MODELS:
         api_key = groq_key
         if not api_key or Groq is None:
             raise RuntimeError("Groq API key or model not configured")
         client = Groq(api_key=api_key)
         print(f"[Groq] model={model} prompt={prompt_name}")
+    elif model in PERPLEXITY_MODELS:
+        api_key = pplx_key
+        if not api_key:
+            raise RuntimeError("Perplexity API key or model not configured")
+        client = None
+        print(f"[Perplexity] model={model} prompt={prompt_name}")
     else:
         api_key = oa_key
         if not api_key:
@@ -105,23 +119,52 @@ def run_prompt(
             "explanation or extra formatting."
         )
 
-    if web_search:
-        if model not in OPENAI_MODELS:
-            raise RuntimeError("Web search is only supported for OpenAI models")
-        print("[LLM] performing web search request")
-        response = client.responses.create(
-            model=model,
-            tools=[{"type": "web_search_preview"}],
-            input=prompt,
+    if model in PERPLEXITY_MODELS:
+        import requests  # local import to avoid mandatory dependency
+
+        print("[LLM] sending Perplexity request")
+        headers = {
+            "accept": "application/json",
+            "authorization": f"Bearer {api_key}",
+            "content-type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+        }
+        if web_search:
+            payload["search_mode"] = "web"
+            payload["web_search_options"] = {"search_context_size": "low"}
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30,
         )
-        text = response.output_text
+        response.raise_for_status()
+        data = response.json()
+        text = data["choices"][0]["message"]["content"]
     else:
-        print("[LLM] sending chat completion request")
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.choices[0].message.content
+        if web_search:
+            if model not in OPENAI_MODELS:
+                raise RuntimeError(
+                    "Web search is only supported for OpenAI models"
+                )
+            print("[LLM] performing web search request")
+            response = client.responses.create(
+                model=model,
+                tools=[{"type": "web_search_preview"}],
+                input=prompt,
+            )
+            text = response.output_text
+        else:
+            print("[LLM] sending chat completion request")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = response.choices[0].message.content
     print("[LLM] response received")
     return text.strip() if clean else text
 
@@ -148,13 +191,19 @@ def lookup_utc_offset(
     date : str, optional
         Date in ``YYYY-MM-DD`` format. If omitted, today's UTC date is used.
     """
-    oa_key, groq_key, model, _ = _get_llm_config()
+    oa_key, groq_key, pplx_key, model, _ = _get_llm_config()
     if model in GROQ_MODELS:
         api_key = groq_key
         if not api_key or Groq is None:
             raise RuntimeError("Groq API key or model not configured")
         client = Groq(api_key=api_key)
         print(f"[Groq] lookup timezone model={model}")
+    elif model in PERPLEXITY_MODELS:
+        api_key = pplx_key
+        if not api_key:
+            raise RuntimeError("Perplexity API key or model not configured")
+        client = None
+        print(f"[Perplexity] lookup timezone model={model}")
     else:
         api_key = oa_key
         if not api_key:
@@ -171,12 +220,36 @@ def lookup_utc_offset(
         f"Country: {country}\nState: {state}\nCity: {city}\nDate: {date}\nUTC offset:"
     )
     print("[LLM] sending time zone request")
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    if model in PERPLEXITY_MODELS:
+        import requests
+
+        headers = {
+            "accept": "application/json",
+            "authorization": f"Bearer {api_key}",
+            "content-type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+        }
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = data["choices"][0]["message"]["content"]
+    else:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.choices[0].message.content
     print("[LLM] time zone response received")
-    return response.choices[0].message.content.strip()
+    return text.strip()
 
 
 def lookup_utc_offset_async(
