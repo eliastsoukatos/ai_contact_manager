@@ -74,6 +74,10 @@ Prompt** lets you apply the configured prompt template for that column to either
 a specific number of contacts, all contacts in the current view or the entire
 database. You can choose to override existing values or only fill missing ones.
 
+LLM requests now execute in background threads so the interface remains
+responsive while waiting for the API. Basic debug messages are printed to the
+terminal whenever a request is sent or completed.
+
 ## CSV Export
 
 When exporting contacts to CSV, the first column contains phone numbers and is labeled `phone_number` in the header. Remaining fields use snake_case headers derived from the table columns.
