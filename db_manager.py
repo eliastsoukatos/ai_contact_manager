@@ -355,7 +355,10 @@ class DBManager:
                         tag_clauses = []
                         for tag in values:
                             if not tag:
-                                tag_clauses.append('(\"tags\" = "" OR \"tags\" IS NULL)')
+                                # Use single quotes for an empty string to avoid
+                                # generating an invalid identifier in SQL. This
+                                # works for both SQLite and PostgreSQL.
+                                tag_clauses.append("(\"tags\" = '' OR \"tags\" IS NULL)")
                                 continue
                             tag_clauses.append(
                                 f'(\"tags\" = {ph} OR \"tags\" LIKE {ph} OR \"tags\" LIKE {ph} OR \"tags\" LIKE {ph})'
