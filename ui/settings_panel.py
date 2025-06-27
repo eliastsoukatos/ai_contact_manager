@@ -51,6 +51,15 @@ class SettingsDialog(QDialog):
         )
         form.addRow("Groq API Key", self.groq_key_edit)
 
+        self.pplx_key_edit = QLineEdit(self._settings.get("perplexity_api_key", ""))
+        self.pplx_key_edit.setEchoMode(QLineEdit.Password)
+        self.pplx_key_edit.setPlaceholderText("pk-...")
+        self.pplx_key_edit.setToolTip("Your Perplexity API key")
+        self.pplx_key_edit.editingFinished.connect(
+            lambda: update_setting("perplexity_api_key", self.pplx_key_edit.text())
+        )
+        form.addRow("Perplexity API Key", self.pplx_key_edit)
+
         # Model selection
         self.model_combo = QComboBox()
         self.model_combo.addItems(
@@ -64,6 +73,8 @@ class SettingsDialog(QDialog):
                 "llama-3.1-8b-instant",
                 "llama-3.3-70b-versatile",
                 "meta-llama/llama-guard-4-12b",
+                "sonar",
+                "sonar-pro",
             ]
         )
         self.model_combo.setCurrentText(self._settings.get("llm_model", "gpt-4.1"))
