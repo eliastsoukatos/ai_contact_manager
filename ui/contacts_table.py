@@ -130,6 +130,7 @@ class ContactsTableWidget(QWidget):
         self.page = 0
         self._has_next = False
         self._ignore_cell_toggle = False
+        self._applying_layout = False
         self._load_layout()
         self._setup_ui()
         self.load_contacts()
@@ -194,6 +195,7 @@ class ContactsTableWidget(QWidget):
         header = FilterHeader()
         self.table.setHorizontalHeader(header)
         header.setSectionsMovable(True)
+        header.sectionMoved.connect(lambda *_: self.save_layout())
         self.table.setEditTriggers(
             QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed
         )
@@ -754,6 +756,7 @@ class ContactsTableWidget(QWidget):
 
     def _apply_layout(self):
         header = self.table.horizontalHeader()
+        self._applying_layout = True
         if hasattr(self, "column_order") and set(self.column_order) == set(self.HEADERS):
             for logical, name in enumerate(self.HEADERS):
                 target = self.column_order.index(name)
@@ -766,8 +769,11 @@ class ContactsTableWidget(QWidget):
             else:
                 header.resizeSection(idx, header.sectionSizeHint(idx))
         self._update_header_styles()
+        self._applying_layout = False
 
     def save_layout(self):
+        if getattr(self, "_applying_layout", False):
+            return
         header = self.table.horizontalHeader()
         order = [
             self.HEADERS[header.logicalIndex(i)] for i in range(header.count())
