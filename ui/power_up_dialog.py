@@ -47,6 +47,9 @@ class PowerUpDialog(QDialog):
         self.search_checkbox = QCheckBox("Internet Search")
         layout.addWidget(self.search_checkbox)
 
+        self.double_checkbox = QCheckBox("Double Check")
+        layout.addWidget(self.double_checkbox)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -64,4 +67,5 @@ class PowerUpDialog(QDialog):
             "limit": self.limit_spin.value(),
             "override": self.override_radio.isChecked(),
             "web_search": self.search_checkbox.isChecked(),
+            "double_check": self.double_checkbox.isChecked(),
         }

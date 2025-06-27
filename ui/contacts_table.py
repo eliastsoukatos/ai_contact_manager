@@ -893,6 +893,10 @@ class ContactsTableWidget(QWidget):
                             prompt,
                             contact,
                             web_search=opts.get("web_search", False),
+                            double_check=(
+                                opts.get("double_check", False)
+                                and field in {"target_company", "contact_icp_status"}
+                            ),
                         )
                         while not future.done():
                             QApplication.processEvents()
