@@ -1,5 +1,6 @@
 from datetime import datetime
 import re
+from concurrent.futures import ThreadPoolExecutor, Future
 from openai import OpenAI
 try:
     from groq import Groq
@@ -34,6 +35,9 @@ GROQ_MODELS = {
     "llama-3.3-70b-versatile",
     "meta-llama/llama-guard-4-12b",
 }
+
+
+_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
 
 def _get_llm_config():
@@ -72,11 +76,13 @@ def run_prompt(
         if not api_key or Groq is None:
             raise RuntimeError("Groq API key or model not configured")
         client = Groq(api_key=api_key)
+        print(f"[Groq] model={model} prompt={prompt_name}")
     else:
         api_key = oa_key
         if not api_key:
             raise RuntimeError("OpenAI API key or model not configured")
         client = OpenAI(api_key=api_key)
+        print(f"[OpenAI] model={model} prompt={prompt_name}")
     if prompt_name == "company_alias":
         template = prompts.get(prompt_name, COMPANY_ALIAS_PROMPT)
     else:
@@ -102,6 +108,7 @@ def run_prompt(
     if web_search:
         if model not in OPENAI_MODELS:
             raise RuntimeError("Web search is only supported for OpenAI models")
+        print("[LLM] performing web search request")
         response = client.responses.create(
             model=model,
             tools=[{"type": "web_search_preview"}],
@@ -109,12 +116,24 @@ def run_prompt(
         )
         text = response.output_text
     else:
+        print("[LLM] sending chat completion request")
         response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.choices[0].message.content
+    print("[LLM] response received")
     return text.strip() if clean else text
+
+
+def run_prompt_async(
+    prompt_name: str,
+    variables: dict | None = None,
+    clean: bool = True,
+    web_search: bool = False,
+) -> Future:
+    """Run ``run_prompt`` in a background thread and return a ``Future``."""
+    return _EXECUTOR.submit(run_prompt, prompt_name, variables, clean, web_search)
 
 
 def lookup_utc_offset(
@@ -135,11 +154,13 @@ def lookup_utc_offset(
         if not api_key or Groq is None:
             raise RuntimeError("Groq API key or model not configured")
         client = Groq(api_key=api_key)
+        print(f"[Groq] lookup timezone model={model}")
     else:
         api_key = oa_key
         if not api_key:
             raise RuntimeError("OpenAI API key or model not configured")
         client = OpenAI(api_key=api_key)
+        print(f"[OpenAI] lookup timezone model={model}")
 
     date = date or datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -149,9 +170,17 @@ def lookup_utc_offset(
         "incomplete, respond with NA. Do not add any explanation or extra text.\n"
         f"Country: {country}\nState: {state}\nCity: {city}\nDate: {date}\nUTC offset:"
     )
-
+    print("[LLM] sending time zone request")
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
     )
+    print("[LLM] time zone response received")
     return response.choices[0].message.content.strip()
+
+
+def lookup_utc_offset_async(
+    country: str, state: str, city: str, date: str | None = None
+) -> Future:
+    """Run ``lookup_utc_offset`` in a background thread and return a ``Future``."""
+    return _EXECUTOR.submit(lookup_utc_offset, country, state, city, date)

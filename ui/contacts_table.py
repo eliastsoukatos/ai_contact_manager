@@ -28,6 +28,7 @@ from PyQt5.QtGui import (
     QPolygonF,
 )
 from PyQt5.QtCore import Qt, QPoint, QPointF
+import time
 
 import os
 
@@ -39,7 +40,12 @@ from ui.tag_tools import TagSelectionDialog, ModeIndicator, TagsCellWidget
 from ui.export_dialog import ExportOptionsDialog
 from exporter import export_contacts
 from ui.power_up_dialog import PowerUpDialog
-from ai.llm_manager import run_prompt, lookup_utc_offset
+from ai.llm_manager import (
+    run_prompt,
+    lookup_utc_offset,
+    run_prompt_async,
+    lookup_utc_offset_async,
+)
 from ai.prompts import FIELD_TO_PROMPT
 from ai.enrichment import _calculate_call_times
 from utils import (
@@ -99,7 +105,7 @@ class ContactsTableWidget(QWidget):
         for col in all_cols:
             if col not in self.HEADERS:
                 self.HEADERS.append(col)
-        self.column_visibility = {h: (h in self.BASE_HEADERS) for h in self.HEADERS}
+        self.column_visibility = {h: True for h in self.HEADERS}
 
         settings = get_settings()
         prompts = settings.get("prompts", {})
@@ -856,11 +862,15 @@ class ContactsTableWidget(QWidget):
                 continue
             try:
                 if field == "time_zone_utc":
-                    offset = lookup_utc_offset(
+                    future = lookup_utc_offset_async(
                         contact.get("country", ""),
                         contact.get("state", ""),
                         contact.get("city", ""),
                     )
+                    while not future.done():
+                        QApplication.processEvents()
+                        time.sleep(0.1)
+                    offset = future.result()
                     morning, afternoon = _calculate_call_times(offset)
                     self.db.update_contact(
                         contact["profile_id"],
@@ -873,7 +883,15 @@ class ContactsTableWidget(QWidget):
                 else:
                     prompt = mapping.get(field)
                     if prompt:
-                        result = run_prompt(prompt, contact, web_search=opts.get("web_search", False))
+                        future = run_prompt_async(
+                            prompt,
+                            contact,
+                            web_search=opts.get("web_search", False),
+                        )
+                        while not future.done():
+                            QApplication.processEvents()
+                            time.sleep(0.1)
+                        result = future.result()
                         self.db.update_contact(contact["profile_id"], {field: result})
             except Exception as exc:  # noqa: BLE001
                 self._status_callback(str(exc))
