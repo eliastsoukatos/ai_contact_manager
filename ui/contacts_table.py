@@ -40,12 +40,11 @@ from ui.tag_tools import TagSelectionDialog, ModeIndicator, TagsCellWidget
 from ui.export_dialog import ExportOptionsDialog
 from exporter import export_contacts
 from ui.power_up_dialog import PowerUpDialog
-from ai.llm_manager import (
-    run_prompt,
-    lookup_utc_offset,
-    run_prompt_async,
-    lookup_utc_offset_async,
-)
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from ai.llm_manager import run_prompt, lookup_utc_offset
+
+MAX_WORKERS = 10
+MAX_RETRIES = 2
 from ai.prompts import FIELD_TO_PROMPT
 from ai.enrichment import _calculate_call_times
 from utils import (
@@ -854,63 +853,123 @@ class ContactsTableWidget(QWidget):
         else:
             contacts = self.db.fetch_contacts()
 
+        failed = self._process_ai_power_up(field, contacts, opts)
+        if failed:
+            text = "Failed contacts:\n" + "\n".join(failed[:10])
+            if len(failed) > 10:
+                text += f"\n...and {len(failed) - 10} more"
+            retry = QMessageBox.question(
+                self,
+                "AI Power Up",
+                text + "\nRetry failed contacts?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if retry == QMessageBox.Yes:
+                failed_contacts = [c for c in contacts if c["profile_id"] in failed]
+                self._status_callback("Retrying failed contacts")
+                self._process_ai_power_up(field, failed_contacts, opts)
+        self._status_callback("AI Power Up completed")
+
+    def _process_ai_power_up(self, field, contacts, opts):
+        """Run the enrichment concurrently for the provided contacts."""
         mapping = FIELD_TO_PROMPT
 
-        progress = QProgressDialog("Running AI Power Up...", None, 0, len(contacts), self)
+        total = len(contacts)
+        if total == 0:
+            QMessageBox.information(self, "AI Power Up", "No contacts to process")
+            return []
+
+        progress = QProgressDialog("Running AI Power Up...", "Cancel", 0, total, self)
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
-        progress.setCancelButton(None)
 
-        for step, contact in enumerate(contacts, start=1):
+        cancel_requested = False
+
+        def _on_cancel():
+            nonlocal cancel_requested
+            cancel_requested = True
+
+        progress.canceled.connect(_on_cancel)
+
+        def enrich_contact(contact):
             if not opts["override"] and contact.get(field):
-                progress.setValue(step)
-                QApplication.processEvents()
-                continue
-            try:
-                if field == "time_zone_utc":
-                    future = lookup_utc_offset_async(
-                        contact.get("country", ""),
-                        contact.get("state", ""),
-                        contact.get("city", ""),
-                    )
-                    while not future.done():
-                        QApplication.processEvents()
-                        time.sleep(0.1)
-                    offset = future.result()
-                    morning, afternoon = _calculate_call_times(offset)
-                    self.db.update_contact(
-                        contact["profile_id"],
-                        {
-                            "time_zone_utc": offset,
-                            "morning_call_time": morning,
-                            "afternoon_call_time": afternoon,
-                        },
-                    )
-                else:
-                    prompt = mapping.get(field)
-                    if prompt:
-                        future = run_prompt_async(
-                            prompt,
-                            contact,
-                            web_search=opts.get("web_search", False),
-                            double_check=(
-                                opts.get("double_check", False)
-                                and field in {"target_company", "contact_icp_status"}
-                            ),
+                return contact["profile_id"], True
+            for attempt in range(MAX_RETRIES + 1):
+                try:
+                    if field == "time_zone_utc":
+                        offset = lookup_utc_offset(
+                            contact.get("country", ""),
+                            contact.get("state", ""),
+                            contact.get("city", ""),
                         )
-                        while not future.done():
-                            QApplication.processEvents()
-                            time.sleep(0.1)
-                        result = future.result()
-                        self.db.update_contact(contact["profile_id"], {field: result})
-            except Exception as exc:  # noqa: BLE001
-                self._status_callback(str(exc))
-            progress.setValue(step)
-            QApplication.processEvents()
+                        morning, afternoon = _calculate_call_times(offset)
+                        self.db.update_contact(
+                            contact["profile_id"],
+                            {
+                                "time_zone_utc": offset,
+                                "morning_call_time": morning,
+                                "afternoon_call_time": afternoon,
+                            },
+                        )
+                    else:
+                        prompt = mapping.get(field)
+                        if prompt:
+                            result = run_prompt(
+                                prompt,
+                                contact,
+                                web_search=opts.get("web_search", False),
+                                double_check=(
+                                    opts.get("double_check", False)
+                                    and field in {"target_company", "contact_icp_status"}
+                                ),
+                            )
+                            self.db.update_contact(contact["profile_id"], {field: result})
+                    return contact["profile_id"], True
+                except Exception:
+                    if attempt < MAX_RETRIES:
+                        time.sleep(2 ** attempt)
+                    else:
+                        return contact["profile_id"], False
+
+        completed = 0
+        failed = []
+        contact_iter = iter(contacts)
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+            futures = set()
+
+            def submit_next():
+                try:
+                    c = next(contact_iter)
+                except StopIteration:
+                    return False
+                futures.add(pool.submit(enrich_contact, c))
+                return True
+
+            for _ in range(MAX_WORKERS):
+                if not submit_next():
+                    break
+
+            while futures:
+                done, _ = wait(futures, return_when=FIRST_COMPLETED)
+                for fut in done:
+                    futures.remove(fut)
+                    pid, ok = fut.result()
+                    completed += 1
+                    if not ok:
+                        failed.append(pid)
+                    progress.setValue(completed)
+                    progress.setLabelText(
+                        f"Completed {completed}/{total} - Failed {len(failed)}"
+                    )
+                    QApplication.processEvents()
+                    if not cancel_requested:
+                        submit_next()
+                if cancel_requested and not futures:
+                    break
 
         progress.close()
         self.load_contacts()
-        self._status_callback("AI Power Up completed")
+        return failed
 
 
 
