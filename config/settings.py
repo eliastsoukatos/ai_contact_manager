@@ -32,6 +32,7 @@ DEFAULT_SETTINGS = {
     },
     "export_fields": [],
     "page_size": 50,
+    "script_template": "Hi {first_name}, I noticed you're the {job_title} at {company_name}.",
 }
 
 _settings = None

@@ -85,6 +85,16 @@ class SettingsDialog(QDialog):
 
         layout.addLayout(form)
 
+        script_box = QGroupBox("Script Template")
+        script_layout = QVBoxLayout(script_box)
+        self.script_edit = QPlainTextEdit(self._settings.get("script_template", ""))
+        self.script_edit.setMinimumHeight(150)
+        self.script_edit.textChanged.connect(
+            lambda: update_setting("script_template", self.script_edit.toPlainText())
+        )
+        script_layout.addWidget(self.script_edit)
+        layout.addWidget(script_box)
+
 
 
         # Time zone settings
