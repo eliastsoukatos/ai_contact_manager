@@ -1,7 +1,5 @@
 from datetime import datetime
 import re
-import time
-from threading import Lock, Semaphore
 from concurrent.futures import ThreadPoolExecutor, Future
 from openai import OpenAI
 try:
@@ -45,44 +43,6 @@ PERPLEXITY_MODELS = {
 
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
-
-# Perplexity rate limiting constants
-_PPLX_MAX_QPS = 2
-_PPLX_MAX_CONCURRENCY = 2
-_PPLX_MAX_RETRIES = 3
-_PPLX_MIN_INTERVAL = 1.0 / _PPLX_MAX_QPS
-_pplx_last_time = 0.0
-_pplx_lock = Lock()
-_pplx_sema = Semaphore(_PPLX_MAX_CONCURRENCY)
-
-
-def _perplexity_request(headers: dict, payload: dict) -> str:
-    """Send a request to the Perplexity API with rate limiting and retries."""
-    import requests
-
-    url = "https://api.perplexity.ai/chat/completions"
-
-    def _do_request():
-        return requests.post(url, headers=headers, json=payload, timeout=30)
-
-    with _pplx_sema:
-        with _pplx_lock:
-            global _pplx_last_time
-            now = time.time()
-            wait = _PPLX_MIN_INTERVAL - (now - _pplx_last_time)
-            if wait > 0:
-                time.sleep(wait)
-            _pplx_last_time = time.time()
-        for attempt in range(_PPLX_MAX_RETRIES):
-            try:
-                resp = _do_request()
-                resp.raise_for_status()
-                data = resp.json()
-                return data["choices"][0]["message"]["content"]
-            except Exception:
-                if attempt == _PPLX_MAX_RETRIES - 1:
-                    raise
-                time.sleep(2 ** attempt)
 
 
 def _get_llm_config():
@@ -170,6 +130,8 @@ def _run_prompt_once(
         )
 
     if model in PERPLEXITY_MODELS:
+        import requests  # local import to avoid mandatory dependency
+
         print("[LLM] sending Perplexity request")
         headers = {
             "accept": "application/json",
@@ -184,7 +146,15 @@ def _run_prompt_once(
         if web_search:
             payload["search_mode"] = "web"
             payload["web_search_options"] = {"search_context_size": "low"}
-        text = _perplexity_request(headers, payload)
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = data["choices"][0]["message"]["content"]
     else:
         if web_search:
             if model not in OPENAI_MODELS:
@@ -288,6 +258,8 @@ def lookup_utc_offset(
     )
     print("[LLM] sending time zone request")
     if model in PERPLEXITY_MODELS:
+        import requests
+
         headers = {
             "accept": "application/json",
             "authorization": f"Bearer {api_key}",
@@ -298,7 +270,15 @@ def lookup_utc_offset(
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
         }
-        text = _perplexity_request(headers, payload)
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = data["choices"][0]["message"]["content"]
     else:
         response = client.chat.completions.create(
             model=model,

@@ -192,3 +192,80 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env
+.venv/
+
+# Installer cache
+__installer/
+
+# IDE/editor config
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+
+# PyInstaller
+*.spec
+
+# Go build artifacts
+*.exe
+*.out
+*.test
+go_backend
+go_backend.exe
+
+# GCC / MinGW build folders and artifacts
+x86_64-w64-mingw32/
+gdb64/
+include/
+lib/
+libexec/
+share/
+bin/
+
+# Config overrides
+config/settings.json
+
+# Databases
+*.db
+
+# CSV exports or imports
+*.csv
+
+# Dependency files
+go.sum
+COPYING-expat.txt
+COPYING-ncurses.txt
+COPYING.default-manifest.txt
+COPYING.ISL.txt
+COPYING.LIB.txt
+COPYING.MinGW-w64-runtime.txt
+COPYING.MinGW-w64.txt
+COPYING.RUNTIME-gcc-tdm.txt
+COPYING.winpthreads.txt
+COPYING3-gcc-tdm.txt
+COPYING3-gdb-tdm.txt
+COPYING3.LIB-gcc-tdm.txt
+go_backend.exe
+LICENSE-python.txt
+README-gcc-tdm64.md
+README-gdb-tdm64.md

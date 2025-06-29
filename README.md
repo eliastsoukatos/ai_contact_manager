@@ -99,12 +99,6 @@ Available Perplexity models you can select are:
 
 Use only the base model name (e.g. `"gpt-4.1"`) without any date suffixes.
 
-Perplexity has very strict undocumented rate limits. To avoid failed
-requests when enriching large batches, the application throttles all
-Perplexity API calls to roughly two requests per second and no more than
-two concurrent connections. Each call is retried with exponential
-backoff if the API responds with an error.
-
 The company alias field is always generated automatically during enrichment.
 The application uses a fixed prompt that cannot be customized to produce a
 short, conversational version of the company name when the alias field is empty.
