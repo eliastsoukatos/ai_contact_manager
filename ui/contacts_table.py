@@ -844,7 +844,14 @@ class ContactsTableWidget(QWidget):
         dialog = ExportOptionsDialog(available, selected, self)
         if dialog.exec() != QDialog.Accepted:
             return
-        folder, split_by_tz, groups, fields = dialog.options()
+        (
+            folder,
+            split_by_tz,
+            groups,
+            chunk_size,
+            fields,
+            export_all,
+        ) = dialog.options()
         if not folder:
             QMessageBox.warning(self, "Export", "Folder name is required")
             return
@@ -854,12 +861,23 @@ class ContactsTableWidget(QWidget):
             return
         export_path = os.path.join(target_dir, folder)
         headers = [h for h in fields if self.column_visibility.get(h, True) and h != "Script"]
+        if export_all:
+            contacts = self.db.fetch_contacts(
+                filters={k: list(v) for k, v in self.filters.items()},
+                search=self.search_text,
+                sort_by=self.HEADERS[self.sort_column] if self.sort_column is not None else "",
+                sort_order="desc" if self.sort_order == Qt.DescendingOrder else "asc",
+            )
+        else:
+            contacts = self.filtered_contacts
+
         files = export_contacts(
-            self.filtered_contacts,
+            contacts,
             headers,
             export_path,
             groups,
             split_by_tz,
+            chunk_size,
         )
         QMessageBox.information(
             self,

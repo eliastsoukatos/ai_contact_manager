@@ -37,10 +37,18 @@ class ExportOptionsDialog(QDialog):
         self.tz_split = QCheckBox("Split by time zone")
         form.addRow(self.tz_split)
 
+        self.export_all = QCheckBox("Export all filtered contacts")
+        form.addRow(self.export_all)
+
         self.group_spin = QSpinBox()
         self.group_spin.setRange(1, 99)
         self.group_spin.setValue(1)
         form.addRow("Number of groups", self.group_spin)
+
+        self.chunk_spin = QSpinBox()
+        self.chunk_spin.setRange(0, 100000)
+        self.chunk_spin.setValue(0)
+        form.addRow("Contacts per file", self.chunk_spin)
 
         field_btn = QPushButton("Select Fields")
         field_btn.clicked.connect(lambda: self._stack.setCurrentIndex(1))
@@ -72,7 +80,7 @@ class ExportOptionsDialog(QDialog):
         layout.addWidget(back_btn)
         self._stack.addWidget(page)
 
-    def options(self) -> Tuple[str, bool, int, List[str]]:
+    def options(self) -> Tuple[str, bool, int, int, List[str], bool]:
         fields = [
             h for h, cb in self.field_checks.items() if cb.isChecked()
         ]
@@ -80,5 +88,7 @@ class ExportOptionsDialog(QDialog):
             self.folder_edit.text().strip(),
             self.tz_split.isChecked(),
             self.group_spin.value(),
+            self.chunk_spin.value(),
             fields,
+            self.export_all.isChecked(),
         )
