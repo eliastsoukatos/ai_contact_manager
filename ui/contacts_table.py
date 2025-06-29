@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QLabel,
     QPushButton,
+    QPlainTextEdit,
     QSpinBox,
     QApplication,
     QFileDialog,
@@ -42,6 +43,18 @@ from exporter import export_contacts
 from ui.power_up_dialog import PowerUpDialog
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from ai.llm_manager import run_prompt, lookup_utc_offset
+
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return ""
+
+
+def _render_script(template: str, data: dict) -> str:
+    try:
+        mapping = {k: "" if v is None else str(v) for k, v in data.items()}
+        return template.format_map(_SafeDict(mapping))
+    except Exception:
+        return template
 
 MAX_WORKERS = 10
 MAX_RETRIES = 2
@@ -83,6 +96,7 @@ class ContactsTableWidget(QWidget):
         "contact_disposition",
         "tags",
         "status",
+        "Script",
     ]
 
     BASE_AI_COLUMNS = [
@@ -248,7 +262,9 @@ class ContactsTableWidget(QWidget):
     def _apply_filters(self):
         sort_by = ""
         if self.sort_column is not None:
-            sort_by = self.HEADERS[self.sort_column]
+            candidate = self.HEADERS[self.sort_column]
+            if candidate != "Script":
+                sort_by = candidate
         sort_order = "desc" if self.sort_order == Qt.DescendingOrder else "asc"
         filters = {k: list(v) for k, v in self.filters.items()}
         contacts = self.db.fetch_contacts(
@@ -339,6 +355,10 @@ class ContactsTableWidget(QWidget):
                     item = QTableWidgetItem(value)
                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                     self.table.setItem(row, col, item)
+                elif header == "Script":
+                    btn = QPushButton("Script")
+                    btn.clicked.connect(lambda _=None, c=contact: self._show_script(c))
+                    self.table.setCellWidget(row, col, btn)
                 else:
                     value = str(contact.get(header, ""))
                     item = QTableWidgetItem(value)
@@ -406,6 +426,22 @@ class ContactsTableWidget(QWidget):
         self.db.update_contact(contact_id, {"status": status})
         self._apply_filters()
         self._status_callback("Status updated")
+
+    def _show_script(self, contact: dict):
+        template = get_settings().get("script_template", "")
+        text = _render_script(template, contact)
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Script")
+        layout = QVBoxLayout(dialog)
+        edit = QPlainTextEdit(text)
+        edit.setReadOnly(True)
+        edit.setMinimumWidth(500)
+        edit.setMinimumHeight(300)
+        layout.addWidget(edit)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
 
     def _get_all_tags(self):
         tags = set(self.session_tags)
@@ -588,6 +624,8 @@ class ContactsTableWidget(QWidget):
         if logical < 0:
             return
         field = self.HEADERS[logical]
+        if field == "Script":
+            return
         values = self.db.get_distinct_values(field)
         popup = FilterPopup(values, field, self._run_ai_power_up, self)
         if field in self.filters:
@@ -608,6 +646,8 @@ class ContactsTableWidget(QWidget):
     def _show_filter_context(self, pos):
         header = self.table.horizontalHeader()
         logical = header.logicalIndexAt(pos)
+        if logical >= 0 and self.HEADERS[logical] == "Script":
+            return
         self._open_filter_popup(logical)
 
     def _on_filter_changed(self, field, popup):
@@ -799,8 +839,9 @@ class ContactsTableWidget(QWidget):
     def export_view(self):
         """Export the currently visible contacts to CSV."""
         settings = get_settings()
-        selected = settings.get("export_fields", self.HEADERS)
-        dialog = ExportOptionsDialog(self.HEADERS, selected, self)
+        available = [h for h in self.HEADERS if h != "Script"]
+        selected = settings.get("export_fields", available)
+        dialog = ExportOptionsDialog(available, selected, self)
         if dialog.exec() != QDialog.Accepted:
             return
         folder, split_by_tz, groups, fields = dialog.options()
@@ -812,7 +853,7 @@ class ContactsTableWidget(QWidget):
         if not target_dir:
             return
         export_path = os.path.join(target_dir, folder)
-        headers = [h for h in fields if self.column_visibility.get(h, True)]
+        headers = [h for h in fields if self.column_visibility.get(h, True) and h != "Script"]
         files = export_contacts(
             self.filtered_contacts,
             headers,
