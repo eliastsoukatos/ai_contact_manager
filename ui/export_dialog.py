@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QStackedLayout,
+    QGridLayout,
 )
 from typing import List, Tuple
 
@@ -63,21 +64,30 @@ class ExportOptionsDialog(QDialog):
 
     def _build_fields_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
+        cols = 4
+        layout = QGridLayout(page)
         self.field_checks = {}
-        for header in self._headers:
+        for idx, header in enumerate(self._headers):
             cb = QCheckBox(header)
             if header == "mobile":
                 cb.setChecked(True)
                 cb.setEnabled(False)
             else:
                 cb.setChecked(header in self._selected)
-            layout.addWidget(cb)
+            row = idx // cols
+            col = idx % cols
+            layout.addWidget(cb, row, col)
             self.field_checks[header] = cb
 
         back_btn = QPushButton("Back")
         back_btn.clicked.connect(lambda: self._stack.setCurrentIndex(0))
-        layout.addWidget(back_btn)
+        layout.addWidget(
+            back_btn,
+            (len(self._headers) + cols - 1) // cols + 1,
+            0,
+            1,
+            cols,
+        )
         self._stack.addWidget(page)
 
     def options(self) -> Tuple[str, bool, int, int, List[str], bool]:
