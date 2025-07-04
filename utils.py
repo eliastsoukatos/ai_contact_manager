@@ -1,3 +1,5 @@
+"""Miscellaneous constants and helpers."""
+
 INACTIVE_DISPOSITIONS = {
     "not_defined",
     "wrong_number",
