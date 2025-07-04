@@ -1,3 +1,5 @@
+"""Launch the PyQt5 interface."""
+
 import sys
 from PyQt5.QtWidgets import (
     QApplication,

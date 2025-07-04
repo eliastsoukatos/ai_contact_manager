@@ -1,3 +1,5 @@
+"""Command line helper for recalculating call times."""
+
 import argparse
 from db_manager import DBManager
 from ai.enrichment import _calculate_call_times, lookup_utc_offset
